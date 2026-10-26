@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+wheels/
+
+# Virtual environments
+.venv/
+
+# Local env and data
+.env
+var/
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# OS
+.DS_Store
+
+# cline
+.cline
+
+# doc
+doc/drafts
