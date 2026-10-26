@@ -1,0 +1,11 @@
+PaperLens database migrations.
+
+Run from the project root:
+
+    uv run alembic upgrade head
+    uv run alembic revision --autogenerate -m "describe change"
+    uv run alembic check
+
+`migrations/env.py` loads the app settings and uses `DATABASE_URL`, or
+`TEST_DATABASE_URL` when `APP_ENV=test`. The application does not create
+tables at startup; migrations are the source of truth for the schema.
