@@ -26,3 +26,6 @@ var/
 
 # doc
 doc/drafts
+
+# vscode
+.vscode
