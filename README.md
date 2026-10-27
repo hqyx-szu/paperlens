@@ -14,8 +14,13 @@
 
 ```bash
 uv sync
-cp .env.example .env
-# 编辑 .env，填入 DATABASE_URL / TEST_DATABASE_URL 的真实密码
+
+# 1) 复制环境变量模板（按操作系统二选一）
+cp .env.example .env              # Linux / macOS
+Copy-Item .env.example .env       # Windows PowerShell
+
+# 2) 编辑 .env，填入 DATABASE_URL / TEST_DATABASE_URL 的真实密码
+
 uv run alembic upgrade head
 uv run python -m scripts.create_admin --email admin@example.com
 uv run uvicorn app.main:app --reload
@@ -28,18 +33,82 @@ uv run uvicorn app.main:app --reload
 
 ### 在 VS Code 中运行
 
-1. 用 VS Code 打开**仓库根目录**（`paperlens`，不是它的上一级）。
-2. `Ctrl+Shift+P` → `Python: Select Interpreter` → 选择 `.venv\Scripts\python.exe`（Python 3.13）。
-3. `Ctrl+Shift+D` 打开「运行和调试」，选择 `PaperLens API (reload)`，按 `F5`。
-4. 打开 http://127.0.0.1:8000/admin 。
+`.vscode/` 是个人 IDE 配置，已写入 `.gitignore`（不入库），新克隆的仓库里没有这个目录。首次使用时自建，只需做一次。
 
-`.vscode/launch.json` 已提供三个配置：
+1. 用 VS Code 打开**仓库根目录**（`paperlens`，不是它的上一级）。
+2. `Ctrl+Shift+P` → `Python: Select Interpreter` → 选择虚拟环境里的解释器（按操作系统）：
+   - Linux / macOS：`.venv/bin/python`
+   - Windows：`.venv\Scripts\python.exe`
+3. 新建 `.vscode/launch.json`，粘贴下方内容（跨平台，Windows 和 Linux 通用，路径全部用 `${workspaceFolder}`）。
+4. `Ctrl+Shift+D` 打开「运行和调试」，选择 `PaperLens API (reload)`，按 `F5`。
+5. 打开 http://127.0.0.1:8000/admin 。
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "PaperLens API (reload)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--host", "127.0.0.1", "--port", "8000", "--reload"],
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "PaperLens API (debug, no reload)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--host", "127.0.0.1", "--port", "8000"],
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "PaperLens tests",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-q"],
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}
+```
+
+三份配置的用途：
 
 | 配置 | 用途 |
 | --- | --- |
 | `PaperLens API (reload)` | 日常开发，改代码自动重启 |
 | `PaperLens API (debug, no reload)` | 打断点调试（`--reload` 会另起子进程，断点不稳定） |
 | `PaperLens tests` | 直接运行全部测试 |
+
+推荐扩展（同样不入库，需要手动安装）：`ms-python.python`、`ms-python.debugpy`、`charliermarsh.ruff`。
+
+想让 VS Code 左侧测试面板可用，再新建 `.vscode/settings.json`，其中 `python.defaultInterpreterPath` 按操作系统填写：
+
+| 系统 | `python.defaultInterpreterPath` |
+| --- | --- |
+| Linux / macOS | `${workspaceFolder}/.venv/bin/python` |
+| Windows | `${workspaceFolder}/.venv/Scripts/python.exe` |
+
+```json
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": ["tests"]
+}
+```
 
 不要用「Run Python File」运行 `app/main.py`：它只创建应用对象，不会启动服务器。
 

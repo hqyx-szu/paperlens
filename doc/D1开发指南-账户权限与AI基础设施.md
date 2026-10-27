@@ -881,7 +881,7 @@ uv run alembic check
 ### 9.1 拆分 models/schemas
 
 ```text
-在 D:\paperlens\paperlens-develop\paperlens-develop 中，把 app/models.py 拆成
+在仓库根目录中，把 app/models.py 拆成
 app/models/base.py、app/models/user.py、app/models/__init__.py；
 把 app/schemas.py 拆成 app/schemas/auth.py、app/schemas/__init__.py。
 要求：
@@ -895,7 +895,7 @@ app/models/base.py、app/models/user.py、app/models/__init__.py；
 ### 9.2 角色与管理员接口
 
 ```text
-在 D:\paperlens\paperlens-develop\paperlens-develop 中实现：
+在仓库根目录中实现：
 1. users.role（reader/admin），迁移 0002_user_roles；
 2. require_admin 依赖；
 3. /api/v1/admin/users 的列表、创建、修改、重置密码；
@@ -912,7 +912,7 @@ app/models/base.py、app/models/user.py、app/models/__init__.py；
 ### 9.3 AI 基础设施
 
 ```text
-在 D:\paperlens\paperlens-develop\paperlens-develop 中实现 AI 公共层：
+在仓库根目录中实现 AI 公共层：
 - app/core/ai/client.py：LLMClient 抽象 + DeepSeekClient（openai SDK）；
 - app/core/ai/streaming.py：SSE 事件与 StreamingResponse；
 - app/core/ai/tools.py：ToolRegistry + run_tool_loop（工具阶段非流式，最终回答流式）；
@@ -926,7 +926,7 @@ app/models/base.py、app/models/user.py、app/models/__init__.py；
 ### 9.4 管理后台前端
 
 ```text
-在 D:\paperlens\paperlens-develop\paperlens-develop\web 中实现：
+在仓库根目录的 web 目录中实现：
 - 登录页；
 - /admin 总览页（用户数、论文状态数、仓库数卡片）；
 - /admin/users 用户管理页（列表、搜索、分页、创建、改角色、启停、重置密码）；
