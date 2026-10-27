@@ -3,7 +3,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_session, get_current_user
@@ -11,14 +10,13 @@ from app.core.config import get_settings
 from app.core.exceptions import AppError
 from app.core.security import (
     generate_session_token,
-    hash_password,
     hash_session_token,
     verify_password,
 )
 from app.core.time import utcnow
 from app.db import get_db
 from app.models import User, UserSession
-from app.schemas import AuthResponse, LoginRequest, RegisterRequest, UserRead
+from app.schemas import AuthResponse, LoginRequest, UserRead
 
 router = APIRouter()
 
@@ -49,36 +47,6 @@ def _set_session_cookie(response: Response, token: str) -> None:
     )
 
 
-@router.post("/register", response_model=AuthResponse, status_code=201)
-async def register(
-    payload: RegisterRequest,
-    response: Response,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> AuthResponse:
-    email = str(payload.email).lower()
-    existing = await db.scalar(select(User.id).where(User.email == email))
-    if existing is not None:
-        raise AppError(409, "email_taken", "该邮箱已注册")
-
-    user = User(
-        email=email,
-        password_hash=hash_password(payload.password),
-        display_name=payload.display_name or email.split("@")[0],
-    )
-    db.add(user)
-    try:
-        await db.flush()
-    except IntegrityError:
-        await db.rollback()
-        raise AppError(409, "email_taken", "该邮箱已注册") from None
-
-    token = _issue_session(db, user)
-    await db.commit()
-    await db.refresh(user)
-    _set_session_cookie(response, token)
-    return AuthResponse(user=UserRead.model_validate(user))
-
-
 @router.post("/login", response_model=AuthResponse)
 async def login(
     payload: LoginRequest,
@@ -90,7 +58,7 @@ async def login(
     if user is None or not verify_password(payload.password, user.password_hash):
         raise AppError(401, "invalid_credentials", "邮箱或密码错误")
     if not user.is_active:
-        raise AppError(403, "user_disabled", "账号已禁用")
+        raise AppError(401, "invalid_credentials", "邮箱或密码错误")
 
     token = _issue_session(db, user)
     await db.commit()

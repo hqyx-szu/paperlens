@@ -1,0 +1,4309 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "PaperLens API",
+    "version": "1.1.0",
+    "description": "PaperLens 论文知识库问答平台 V1.1 目标契约。\n\n- 认证：HttpOnly opaque session cookie `paperlens_session`，不使用 JWT/Bearer。\n- 错误：统一 `{\"error\":{\"code\",\"message\",\"details\"}}`，`details` 始终存在，无值为 null。\n- 分页：实体列表 `page/page_size`；消息 `limit/before_id` 游标。\n- 私有资源对无权限用户统一 404；403 只用于已登录但角色/归属不足。\n- SSE：POST + Cookie + Accept: text/event-stream，事件 meta/token/citation/done/error。\n\n人工契约详见 `doc/API接口文档（V1.0）.md`（内容版本 V1.1）。",
+    "contact": {
+      "name": "PaperLens Team"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8000",
+      "description": "本地开发"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Meta",
+      "description": "应用信息与健康检查"
+    },
+    {
+      "name": "Auth",
+      "description": "登录、退出、当前用户"
+    },
+    {
+      "name": "Admin-Users",
+      "description": "管理后台：用户与总览"
+    },
+    {
+      "name": "Admin-Papers",
+      "description": "管理后台：论文目录"
+    },
+    {
+      "name": "Papers",
+      "description": "用户端论文详情与下载"
+    },
+    {
+      "name": "Summaries",
+      "description": "四维总结"
+    },
+    {
+      "name": "Search",
+      "description": "全局文字/PDF 查询"
+    },
+    {
+      "name": "Sessions",
+      "description": "会话与三视图"
+    },
+    {
+      "name": "Chat",
+      "description": "SSE 对话"
+    },
+    {
+      "name": "Repos",
+      "description": "仓库、Star、相关仓库、仓库对话"
+    },
+    {
+      "name": "Admin-Repos",
+      "description": "管理后台：仓库列表"
+    }
+  ],
+  "security": [
+    {
+      "cookieAuth": []
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "tags": [
+          "Meta"
+        ],
+        "summary": "应用信息",
+        "description": "无需登录。返回应用名、版本和文档地址。",
+        "operationId": "getRoot",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "应用信息",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "version",
+                    "docs"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "docs": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "name": "PaperLens",
+                  "version": "0.1.0",
+                  "docs": "/docs"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/live": {
+      "get": {
+        "tags": [
+          "Meta"
+        ],
+        "summary": "存活检查",
+        "description": "无需登录。进程存活即返回 200。",
+        "operationId": "getLiveHealth",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "存活",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "service",
+                    "version"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "service": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "status": "ok",
+                  "service": "paperlens",
+                  "version": "0.1.0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/ready": {
+      "get": {
+        "tags": [
+          "Meta"
+        ],
+        "summary": "就绪检查",
+        "description": "无需登录。执行数据库 `SELECT 1`；只检查数据库连接，不检查迁移、模型服务、磁盘。",
+        "operationId": "getReadyHealth",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "就绪",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "database"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "database": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "status": "ok",
+                  "database": "ok"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "登录",
+        "description": "邮箱不区分大小写。账号不存在、密码错误、账号停用统一返回 401 `invalid_credentials`。成功创建新会话并设置 HttpOnly Cookie `paperlens_session`，不返回令牌。",
+        "operationId": "login",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "登录成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "paperlens_session=<opaque>; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800（生产追加 Secure）",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "退出当前会话",
+        "description": "只删除当前 Cookie 对应的会话，不影响其他设备。",
+        "operationId": "logout",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "已退出，无响应体"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "当前用户",
+        "description": "返回当前登录用户；角色变更、停用状态在下一次请求生效。",
+        "operationId": "getMe",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "当前用户",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users": {
+      "get": {
+        "tags": [
+          "Admin-Users"
+        ],
+        "summary": "后台用户列表",
+        "description": "管理员接口。按 id DESC 排序；`q` 匹配邮箱或显示名。",
+        "operationId": "listAdminUsers",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "用户分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "匹配邮箱或显示名，≤200；空字符串不过滤",
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "default": ""
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "页码，≥1",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "description": "每页条数，1–100",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Admin-Users"
+        ],
+        "summary": "创建用户",
+        "description": "管理员建号，不开放自注册，不自动登录。邮箱入库前转小写；`display_name` 为空时取邮箱 @ 前部分并截断到 64 字符。",
+        "operationId": "createAdminUser",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUserCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{user_id}": {
+      "patch": {
+        "tags": [
+          "Admin-Users"
+        ],
+        "summary": "修改用户",
+        "description": "至少传一个字段；空对象返回 400。支持改显示名、角色、启停；不能改邮箱和密码。停用会删除该用户全部会话。",
+        "operationId": "updateAdminUser",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "修改成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "description": "用户 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUserUpdate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{user_id}/reset-password": {
+      "post": {
+        "tags": [
+          "Admin-Users"
+        ],
+        "summary": "重置用户密码",
+        "description": "更新密码哈希并删除该用户全部会话；管理员重置自己的密码会撤销自己当前会话。",
+        "operationId": "resetUserPassword",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "重置成功，无响应体"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "description": "用户 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordReset"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/stats": {
+      "get": {
+        "tags": [
+          "Admin-Users"
+        ],
+        "summary": "管理总览",
+        "description": "统计用户、论文、仓库数量；论文/仓库统计包含归档和私有。",
+        "operationId": "getAdminStats",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统计",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminStats"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/papers/import": {
+      "post": {
+        "tags": [
+          "Admin-Papers"
+        ],
+        "summary": "导入 PDF 论文",
+        "description": "multipart 上传 1–20 个 PDF，每个 ≤20MB，总量 ≤100MB。按 SHA-256 去重。接口只保证入队，异步解析。单文件类型/大小/文件名错误不拒绝整个请求，放在 `items` 中 `rejected`。成功 202。",
+        "operationId": "importPapers",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "已接受，逐文件结果见 items",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "files"
+                ],
+                "properties": {
+                  "files": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 20,
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/papers": {
+      "get": {
+        "tags": [
+          "Admin-Papers"
+        ],
+        "summary": "后台论文列表",
+        "description": "管理员接口。按 created_at DESC, id DESC 排序；`archived` 不传表示全部。",
+        "operationId": "listAdminPapers",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "论文分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPaperPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "匹配标题/摘要，≤200；空字符串或全空白不过滤",
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "default": ""
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "queued",
+                "parsing",
+                "indexing",
+                "ready",
+                "failed"
+              ],
+              "nullable": true
+            }
+          },
+          {
+            "name": "archived",
+            "in": "query",
+            "required": false,
+            "description": "true 仅归档；false 仅未归档；不传全部",
+            "schema": {
+              "type": "boolean",
+              "nullable": true
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "页码，≥1",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "description": "每页条数，1–100",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/papers/{paper_id}": {
+      "get": {
+        "tags": [
+          "Admin-Papers"
+        ],
+        "summary": "后台论文详情",
+        "description": "包含摘要、DOI、片段数、归档时间和文件信息。",
+        "operationId": "getAdminPaper",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "论文详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPaperDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "parameters": [
+          {
+            "name": "paper_id",
+            "in": "path",
+            "required": true,
+            "description": "论文 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Admin-Papers"
+        ],
+        "summary": "修正论文元数据",
+        "description": "只改元数据，不改状态、归档和文件。处理中（queued/parsing/indexing）返回 409。`year/venue/abstract` 传 null 清空；`authors` 传 [] 清空。",
+        "operationId": "updateAdminPaper",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "修改成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPaperDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "paper_id",
+            "in": "path",
+            "required": true,
+            "description": "论文 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminPaperUpdate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/papers/{paper_id}/retry": {
+      "post": {
+        "tags": [
+          "Admin-Papers"
+        ],
+        "summary": "重试失败论文",
+        "description": "只有 status=failed 且未归档可以重试；状态变为 queued 并清空 error_message。成功 202。",
+        "operationId": "retryPaper",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "已重新入队",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPaperDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        },
+        "parameters": [
+          {
+            "name": "paper_id",
+            "in": "path",
+            "required": true,
+            "description": "论文 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/papers/{paper_id}/archive": {
+      "post": {
+        "tags": [
+          "Admin-Papers"
+        ],
+        "summary": "归档论文",
+        "description": "只有 status=ready 可以归档；已归档且 ready 再次调用幂等返回 200。归档单向、不可取消；不删除文件、片段、四维。",
+        "operationId": "archivePaper",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "归档成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPaperDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        },
+        "parameters": [
+          {
+            "name": "paper_id",
+            "in": "path",
+            "required": true,
+            "description": "论文 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/papers": {
+      "get": {
+        "tags": [
+          "Papers"
+        ],
+        "summary": "用户端论文目录",
+        "description": "只返回 status=ready 且未归档论文；有 q 时按相关度降序、id DESC，无 q 时 id DESC。",
+        "operationId": "listPapers",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "论文分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "标题/摘要关键词，≤200；支持中文",
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "default": ""
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "页码，≥1",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "description": "每页条数，1–100",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/papers/{paper_id}": {
+      "get": {
+        "tags": [
+          "Papers"
+        ],
+        "summary": "论文详情",
+        "description": "所有登录用户可查看；归档论文仍可查看。处理中/失败论文在用户端按不存在处理。",
+        "operationId": "getPaper",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "论文详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "parameters": [
+          {
+            "name": "paper_id",
+            "in": "path",
+            "required": true,
+            "description": "论文 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/papers/{paper_id}/download": {
+      "get": {
+        "tags": [
+          "Papers"
+        ],
+        "summary": "下载论文原文",
+        "description": "归档论文只要文件保留仍可下载。不提供上传、替换、删除文件。",
+        "operationId": "downloadPaper",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF 二进制流",
+            "headers": {
+              "Content-Disposition": {
+                "description": "attachment; filename=\"paper.pdf\"; filename*=UTF-8''<encoded>",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "parameters": [
+          {
+            "name": "paper_id",
+            "in": "path",
+            "required": true,
+            "description": "论文 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/papers/{paper_id}/summaries": {
+      "get": {
+        "tags": [
+          "Summaries"
+        ],
+        "summary": "读取四维总结",
+        "description": "四维是论文级共享缓存；缓存键含 content_hash + prompt_version + model。论文不可见优先 404 paper_not_found；可见但未缓存 404 summary_not_generated。",
+        "operationId": "getPaperSummary",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "四维内容",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "paper_id",
+            "in": "path",
+            "required": true,
+            "description": "论文 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "description": "详略档位，默认 standard",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "brief",
+                "standard",
+                "deep"
+              ],
+              "default": "standard"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/papers/{paper_id}/summaries/generate": {
+      "post": {
+        "tags": [
+          "Summaries"
+        ],
+        "summary": "生成四维总结",
+        "description": "同步生成，最长等待 60 秒；缓存已存在直接返回。归档论文允许生成。并发可能重复生成，最终以后写为准。",
+        "operationId": "generatePaperSummary",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "四维内容",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          },
+          "504": {
+            "$ref": "#/components/responses/GatewayTimeout"
+          }
+        },
+        "parameters": [
+          {
+            "name": "paper_id",
+            "in": "path",
+            "required": true,
+            "description": "论文 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SummaryGenerateRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/papers/{paper_id}/chat/stream": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "单篇论文对话（SSE）",
+        "description": "只使用当前论文内容，不访问全局目录、其他论文、仓库。归档论文只要片段存在仍可对话。流开始前错误返回 JSON 且不落库。",
+        "operationId": "paperChatStream",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE 事件流。事件：meta / token / citation / done / error；心跳 `: ping` 每 15 秒",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "event: meta\ndata: {\"conversation_id\":1,\"user_message_id\":10,\"scope\":\"session\",\"scope_id\":3}\n\n"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "paper_id",
+            "in": "path",
+            "required": true,
+            "description": "论文 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/papers/{paper_id}/messages": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "单篇论文对话历史",
+        "description": "返回当前用户在该论文的对话消息；没有对话时返回空列表，不创建对话。",
+        "operationId": "listPaperMessages",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "消息分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessagePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "paper_id",
+            "in": "path",
+            "required": true,
+            "description": "论文 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "每页条数，1–200",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "required": false,
+            "description": "只返回 id < before_id 的消息；首次不传",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "nullable": true
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/search": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "文字全局查询",
+        "description": "在全局论文目录检索，不限于用户仓库。一次查询创建一个会话并保存论文/证据快照；没有结果也创建空会话。成功 201。",
+        "operationId": "search",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "会话详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search/pdf": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "PDF 全局查询",
+        "description": "提取 PDF 文字作为查询（内部截取前 2000 字符），不保存文件、不入库、不创建论文。单文件 ≤20MB、≤50 页。成功 201。",
+        "operationId": "searchPdf",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "会话详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "最近会话列表",
+        "description": "只返回当前用户会话；按 created_at DESC, id DESC 排序。管理员也不能查看他人会话。",
+        "operationId": "listSessions",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "会话分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "页码，≥1",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "description": "每页条数，1–100",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "会话详情（三视图数据）",
+        "description": "会话所有者；其他人（含管理员）404。论文集合和证据是快照，论文元数据和归档状态读取当前值；相关仓库实时计算。",
+        "operationId": "getSession",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "会话详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "description": "会话 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/sessions/{session_id}/chat/stream": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "会话内对话（SSE）",
+        "description": "只使用会话保存的论文和证据快照，不重新检索全局目录。无证据时流开始前 409 no_evidence。",
+        "operationId": "sessionChatStream",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE 事件流。事件：meta / token / citation / done / error；心跳 `: ping` 每 15 秒",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "event: meta\ndata: {\"conversation_id\":1,\"user_message_id\":10,\"scope\":\"session\",\"scope_id\":3}\n\n"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "description": "会话 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}/messages": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "会话消息历史",
+        "description": "消息按 id DESC 返回，包含系统消息；最新一页可能不含系统消息，用 SessionDetail.system_message 展示欢迎语。",
+        "operationId": "listSessionMessages",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "消息分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessagePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "description": "会话 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "每页条数，1–200",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "required": false,
+            "description": "只返回 id < before_id 的消息；首次不传",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "nullable": true
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/repos": {
+      "post": {
+        "tags": [
+          "Repos"
+        ],
+        "summary": "创建仓库",
+        "description": "仓库归创建者所有；同一创建者下名称唯一（不区分大小写）。创建接口不接受 paper_ids。",
+        "operationId": "createRepo",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "仓库详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepoCreate"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Repos"
+        ],
+        "summary": "仓库列表",
+        "description": "scope=mine 我创建的（含私有）；scope=public 所有公开仓库。按 updated_at DESC, id DESC 排序。",
+        "operationId": "listRepos",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "仓库分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "mine",
+                "public"
+              ],
+              "default": "mine"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "页码，≥1",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "description": "每页条数，1–100",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/repos/related": {
+      "get": {
+        "tags": [
+          "Repos"
+        ],
+        "summary": "相关仓库推荐",
+        "description": "只返回公开仓库，排除自己的仓库；先相关性，Star 仅做小幅加分。空会话返回空页。必须保证本路由不被 /repos/{repo_id} 吞掉。",
+        "operationId": "listRelatedRepos",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "相关仓库分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelatedRepoPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "description": "当前用户的会话 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "页码，≥1",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "description": "每页条数，1–100",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/repos/{repo_id}": {
+      "get": {
+        "tags": [
+          "Repos"
+        ],
+        "summary": "仓库详情",
+        "description": "公开仓库所有登录用户可看；私有仓库仅创建者、管理员可看，其他 404。管理员对公开仓库只读，除非是创建者。",
+        "operationId": "getRepo",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "仓库详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "description": "仓库 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Repos"
+        ],
+        "summary": "修改仓库",
+        "description": "创建者，或管理员且仓库为私有。空对象 400。公开转私有/私有转公开会影响 Star 展示和对话可见性。",
+        "operationId": "updateRepo",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "修改成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "description": "仓库 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepoUpdate"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Repos"
+        ],
+        "summary": "删除仓库",
+        "description": "创建者，或管理员且仓库为私有。删除仓库论文关系、Star 关系、该仓库全部对话和消息；不删除全局论文、文件、片段、四维。再次删除 404。",
+        "operationId": "deleteRepo",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "删除成功，无响应体"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "description": "仓库 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/repos/{repo_id}/papers": {
+      "get": {
+        "tags": [
+          "Repos"
+        ],
+        "summary": "仓库论文列表",
+        "description": "权限同仓库详情。包含已归档但仍在仓库中的论文；按 added_at DESC, paper_id DESC 排序。",
+        "operationId": "listRepoPapers",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "论文分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaperPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "description": "仓库 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "页码，≥1",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "description": "每页条数，1–100",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Repos"
+        ],
+        "summary": "批量添加论文",
+        "description": "创建者，或管理员且仓库为私有。只能添加 ready 且未归档论文；重复添加忽略。`ignored.reason` 判定顺序：not_found → duplicate → not_ready → archived。成功 200（不是 201）。",
+        "operationId": "addRepoPapers",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "逐篇结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoPaperAddResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "description": "仓库 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepoPaperAddRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/repos/{repo_id}/papers/{paper_id}": {
+      "delete": {
+        "tags": [
+          "Repos"
+        ],
+        "summary": "移除仓库论文",
+        "description": "幂等：论文不存在或不在仓库中也返回 204。只移除关系，不删除全局论文；已有消息和引用保留。",
+        "operationId": "removeRepoPaper",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "移除成功，无响应体"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "description": "仓库 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "paper_id",
+            "in": "path",
+            "required": true,
+            "description": "论文 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/repos/{repo_id}/star": {
+      "post": {
+        "tags": [
+          "Repos"
+        ],
+        "summary": "Star 仓库",
+        "description": "仅公开仓库且不是自己的仓库。幂等；star_count 返回操作后的总数（含已停用账号的 Star）。错误顺序：可见性 → 是否私有 → 是否自己的公开仓库。",
+        "operationId": "starRepo",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Star 结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StarResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "description": "仓库 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Repos"
+        ],
+        "summary": "取消 Star",
+        "description": "幂等；未 Star 也返回成功。私有仓库上的取消 Star 返回 400 repo_not_public；历史 Star 记录保留。",
+        "operationId": "unstarRepo",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Star 结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StarResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "description": "仓库 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/repos/{repo_id}/chat/stream": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "仓库对话（SSE，只读 Agent）",
+        "description": "范围是整个当前仓库，包含已归档但仍在仓库中的论文。Agent 最多 5 步，只读，不能访问全局目录、其他仓库、互联网。公开仓库对话只有发起者可见；私有仓库创建者/管理员可见全部。",
+        "operationId": "repoChatStream",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE 事件流。事件：meta / token / citation / done / error；心跳 `: ping` 每 15 秒",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "event: meta\ndata: {\"conversation_id\":1,\"user_message_id\":10,\"scope\":\"session\",\"scope_id\":3}\n\n"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "description": "仓库 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/repos/{repo_id}/messages": {
+      "get": {
+        "tags": [
+          "Repos"
+        ],
+        "summary": "我的仓库对话历史",
+        "description": "只返回当前用户在该仓库的对话消息；没有对话时返回空列表，不创建对话。",
+        "operationId": "listRepoMessages",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "消息分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessagePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "description": "仓库 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "每页条数，1–200",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "required": false,
+            "description": "只返回 id < before_id 的消息；首次不传",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "nullable": true
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/repos/{repo_id}/conversations": {
+      "get": {
+        "tags": [
+          "Repos"
+        ],
+        "summary": "仓库对话列表",
+        "description": "公开仓库只返回当前用户的对话（0 或 1 条）；私有仓库创建者/管理员返回全部用户的对话。按 last_message_at DESC, id DESC 排序，null 排最后。",
+        "operationId": "listRepoConversations",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "对话分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "description": "仓库 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "页码，≥1",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "description": "每页条数，1–100",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/repos/{repo_id}/conversations/{conversation_id}/messages": {
+      "get": {
+        "tags": [
+          "Repos"
+        ],
+        "summary": "指定对话消息",
+        "description": "公开仓库只有对话发起者可查看；私有仓库创建者、管理员、发起者可查看。管理员（非创建者）在公开仓库查看他人对话返回 403；其他非发起者（含创建者）返回 404。",
+        "operationId": "listConversationMessages",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "消息分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessagePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "description": "仓库 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "description": "对话 ID",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "每页条数，1–200",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "required": false,
+            "description": "只返回 id < before_id 的消息；首次不传",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "nullable": true
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/repos": {
+      "get": {
+        "tags": [
+          "Admin-Repos"
+        ],
+        "summary": "后台仓库列表",
+        "description": "管理员接口，包含私有仓库和创建者邮箱；按 updated_at DESC, id DESC 排序。",
+        "operationId": "listAdminRepos",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "仓库分页",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminRepoPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "匹配仓库名、创建者邮箱/显示名，≤200",
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "default": ""
+            }
+          },
+          {
+            "name": "visibility",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "public",
+                "private"
+              ],
+              "nullable": true
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "页码，≥1",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "description": "每页条数，1–100",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "paperlens_session",
+        "description": "登录成功后由服务端 Set-Cookie 下发；HttpOnly，7 天有效。"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "details"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "稳定英文错误码",
+            "example": "validation_error"
+          },
+          "message": {
+            "type": "string",
+            "description": "用户可读中文消息",
+            "example": "请求参数不合法"
+          },
+          "details": {
+            "type": "array",
+            "nullable": true,
+            "description": "参数校验时为数组；其他情况必须为 null，字段不可省略",
+            "items": {
+              "$ref": "#/components/schemas/ValidationDetail"
+            }
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/Error"
+          }
+        }
+      },
+      "ValidationDetail": {
+        "type": "object",
+        "required": [
+          "field",
+          "message"
+        ],
+        "properties": {
+          "field": {
+            "type": "string",
+            "example": "body.email"
+          },
+          "message": {
+            "type": "string",
+            "example": "value is not a valid email address"
+          }
+        }
+      },
+      "UserRole": {
+        "type": "string",
+        "enum": [
+          "reader",
+          "admin"
+        ]
+      },
+      "PaperStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "parsing",
+          "indexing",
+          "ready",
+          "failed"
+        ]
+      },
+      "QueryType": {
+        "type": "string",
+        "enum": [
+          "text",
+          "pdf"
+        ]
+      },
+      "RepoVisibility": {
+        "type": "string",
+        "enum": [
+          "public",
+          "private"
+        ]
+      },
+      "RepoScope": {
+        "type": "string",
+        "enum": [
+          "mine",
+          "public"
+        ],
+        "default": "mine"
+      },
+      "RepoPaperAddReason": {
+        "type": "string",
+        "enum": [
+          "duplicate",
+          "not_ready",
+          "archived",
+          "not_found"
+        ]
+      },
+      "MessageRole": {
+        "type": "string",
+        "enum": [
+          "system",
+          "user",
+          "assistant"
+        ]
+      },
+      "MessageStatus": {
+        "type": "string",
+        "enum": [
+          "complete",
+          "stopped",
+          "error"
+        ]
+      },
+      "SummaryLevel": {
+        "type": "string",
+        "enum": [
+          "brief",
+          "standard",
+          "deep"
+        ]
+      },
+      "ChatScope": {
+        "type": "string",
+        "enum": [
+          "session",
+          "repo",
+          "paper"
+        ]
+      },
+      "UserBrief": {
+        "type": "object",
+        "required": [
+          "id",
+          "display_name"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "display_name": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "UserRead": {
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "display_name",
+          "role",
+          "is_active",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "display_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PaperBrief": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "authors",
+          "year",
+          "venue",
+          "is_archived"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "year": {
+            "type": "integer",
+            "nullable": true
+          },
+          "venue": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_archived": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PaperDetail": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "authors",
+          "year",
+          "venue",
+          "abstract",
+          "doi",
+          "is_archived",
+          "has_file",
+          "can_download",
+          "can_chat",
+          "available_summary_levels",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "year": {
+            "type": "integer",
+            "nullable": true
+          },
+          "venue": {
+            "type": "string",
+            "nullable": true
+          },
+          "abstract": {
+            "type": "string",
+            "nullable": true
+          },
+          "doi": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_archived": {
+            "type": "boolean"
+          },
+          "has_file": {
+            "type": "boolean"
+          },
+          "can_download": {
+            "type": "boolean"
+          },
+          "can_chat": {
+            "type": "boolean"
+          },
+          "available_summary_levels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SummaryLevel"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Citation": {
+        "type": "object",
+        "required": [
+          "index",
+          "paper_id",
+          "chunk_id",
+          "page",
+          "quote"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "paper_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "chunk_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "page": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1
+          },
+          "quote": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "required": [
+          "id",
+          "role",
+          "content",
+          "citations",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "role": {
+            "$ref": "#/components/schemas/MessageRole"
+          },
+          "content": {
+            "type": "string"
+          },
+          "citations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            }
+          },
+          "status": {
+            "$ref": "#/components/schemas/MessageStatus"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MessagePage": {
+        "type": "object",
+        "required": [
+          "items",
+          "has_more",
+          "next_before_id"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "next_before_id": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "AdminUserPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserRead"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
+        }
+      },
+      "PaperPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaperBrief"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
+        }
+      },
+      "AdminPaperListItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "authors",
+          "year",
+          "venue",
+          "status",
+          "is_archived",
+          "file_name",
+          "error_message",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "year": {
+            "type": "integer",
+            "nullable": true
+          },
+          "venue": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/PaperStatus"
+          },
+          "is_archived": {
+            "type": "boolean"
+          },
+          "file_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AdminPaperPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminPaperListItem"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
+        }
+      },
+      "AdminPaperFile": {
+        "type": "object",
+        "required": [
+          "original_filename",
+          "size",
+          "mime",
+          "sha256",
+          "uploaded_at"
+        ],
+        "properties": {
+          "original_filename": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "mime": {
+            "type": "string",
+            "example": "application/pdf"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "uploaded_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AdminPaperDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AdminPaperListItem"
+          },
+          {
+            "type": "object",
+            "required": [
+              "abstract",
+              "doi",
+              "chunk_count",
+              "archived_at",
+              "file"
+            ],
+            "properties": {
+              "abstract": {
+                "type": "string",
+                "nullable": true
+              },
+              "doi": {
+                "type": "string",
+                "nullable": true
+              },
+              "chunk_count": {
+                "type": "integer"
+              },
+              "archived_at": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              },
+              "file": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/AdminPaperFile"
+                  }
+                ],
+                "nullable": true
+              }
+            }
+          }
+        ]
+      },
+      "ImportItem": {
+        "type": "object",
+        "required": [
+          "filename",
+          "paper_id",
+          "status",
+          "duplicate",
+          "is_archived",
+          "error"
+        ],
+        "properties": {
+          "filename": {
+            "type": "string"
+          },
+          "paper_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "parsing",
+              "indexing",
+              "ready",
+              "failed"
+            ],
+            "nullable": true
+          },
+          "duplicate": {
+            "type": "boolean"
+          },
+          "is_archived": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ImportResponse": {
+        "type": "object",
+        "required": [
+          "items",
+          "created",
+          "duplicates",
+          "rejected"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportItem"
+            }
+          },
+          "created": {
+            "type": "integer"
+          },
+          "duplicates": {
+            "type": "integer"
+          },
+          "rejected": {
+            "type": "integer"
+          }
+        }
+      },
+      "SessionSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "query",
+          "query_type",
+          "paper_count",
+          "evidence_count",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "query": {
+            "type": "string"
+          },
+          "query_type": {
+            "$ref": "#/components/schemas/QueryType"
+          },
+          "paper_count": {
+            "type": "integer"
+          },
+          "evidence_count": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SessionPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionSummary"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
+        }
+      },
+      "SessionDetail": {
+        "type": "object",
+        "required": [
+          "id",
+          "query",
+          "query_type",
+          "paper_count",
+          "evidence_count",
+          "related_repo_count",
+          "has_evidence",
+          "system_message",
+          "conversation_id",
+          "papers",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "query": {
+            "type": "string"
+          },
+          "query_type": {
+            "$ref": "#/components/schemas/QueryType"
+          },
+          "paper_count": {
+            "type": "integer"
+          },
+          "evidence_count": {
+            "type": "integer"
+          },
+          "related_repo_count": {
+            "type": "integer"
+          },
+          "has_evidence": {
+            "type": "boolean"
+          },
+          "system_message": {
+            "type": "string"
+          },
+          "conversation_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "papers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaperBrief"
+            },
+            "maxItems": 8
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RepoSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "visibility",
+          "owner",
+          "paper_count",
+          "star_count",
+          "is_starred",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/RepoVisibility"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/UserBrief"
+          },
+          "paper_count": {
+            "type": "integer"
+          },
+          "star_count": {
+            "type": "integer"
+          },
+          "is_starred": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RepoPermissions": {
+        "type": "object",
+        "required": [
+          "can_edit",
+          "can_delete",
+          "can_manage_papers",
+          "can_star",
+          "can_chat"
+        ],
+        "properties": {
+          "can_edit": {
+            "type": "boolean"
+          },
+          "can_delete": {
+            "type": "boolean"
+          },
+          "can_manage_papers": {
+            "type": "boolean"
+          },
+          "can_star": {
+            "type": "boolean"
+          },
+          "can_chat": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RepoDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RepoSummary"
+          },
+          {
+            "type": "object",
+            "required": [
+              "permissions"
+            ],
+            "properties": {
+              "permissions": {
+                "$ref": "#/components/schemas/RepoPermissions"
+              }
+            }
+          }
+        ]
+      },
+      "RepoPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RepoSummary"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
+        }
+      },
+      "RelatedRepoItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "owner",
+          "paper_count",
+          "star_count",
+          "is_starred",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/UserBrief"
+          },
+          "paper_count": {
+            "type": "integer"
+          },
+          "star_count": {
+            "type": "integer"
+          },
+          "is_starred": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 100
+          }
+        }
+      },
+      "RelatedRepoPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelatedRepoItem"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
+        }
+      },
+      "ConversationItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "user",
+          "message_count",
+          "last_message_at",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserBrief"
+          },
+          "message_count": {
+            "type": "integer"
+          },
+          "last_message_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ConversationPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationItem"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
+        }
+      },
+      "IgnoredPaper": {
+        "type": "object",
+        "required": [
+          "paper_id",
+          "reason"
+        ],
+        "properties": {
+          "paper_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/RepoPaperAddReason"
+          }
+        }
+      },
+      "RepoPaperAddResult": {
+        "type": "object",
+        "required": [
+          "added",
+          "ignored"
+        ],
+        "properties": {
+          "added": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaperBrief"
+            }
+          },
+          "ignored": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IgnoredPaper"
+            }
+          }
+        }
+      },
+      "StarResult": {
+        "type": "object",
+        "required": [
+          "starred",
+          "star_count"
+        ],
+        "properties": {
+          "starred": {
+            "type": "boolean"
+          },
+          "star_count": {
+            "type": "integer"
+          }
+        }
+      },
+      "AdminRepoListItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "visibility",
+          "owner",
+          "owner_email",
+          "paper_count",
+          "star_count",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/RepoVisibility"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/UserBrief"
+          },
+          "owner_email": {
+            "type": "string",
+            "format": "email"
+          },
+          "paper_count": {
+            "type": "integer"
+          },
+          "star_count": {
+            "type": "integer"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AdminRepoPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminRepoListItem"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
+          }
+        }
+      },
+      "AdminStats": {
+        "type": "object",
+        "required": [
+          "users_total",
+          "users_active",
+          "papers_total",
+          "papers_ready",
+          "papers_processing",
+          "papers_failed",
+          "papers_archived",
+          "repos_total",
+          "repos_private",
+          "generated_at"
+        ],
+        "properties": {
+          "users_total": {
+            "type": "integer"
+          },
+          "users_active": {
+            "type": "integer"
+          },
+          "papers_total": {
+            "type": "integer"
+          },
+          "papers_ready": {
+            "type": "integer"
+          },
+          "papers_processing": {
+            "type": "integer"
+          },
+          "papers_failed": {
+            "type": "integer"
+          },
+          "papers_archived": {
+            "type": "integer"
+          },
+          "repos_total": {
+            "type": "integer"
+          },
+          "repos_private": {
+            "type": "integer"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SummaryContent": {
+        "type": "object",
+        "required": [
+          "problem",
+          "prior_work",
+          "method_innovation",
+          "limitations"
+        ],
+        "properties": {
+          "problem": {
+            "type": "string"
+          },
+          "prior_work": {
+            "type": "string"
+          },
+          "method_innovation": {
+            "type": "string"
+          },
+          "limitations": {
+            "type": "string"
+          }
+        }
+      },
+      "SummaryRead": {
+        "type": "object",
+        "required": [
+          "paper_id",
+          "level",
+          "content",
+          "citations",
+          "generated_at"
+        ],
+        "properties": {
+          "paper_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "level": {
+            "$ref": "#/components/schemas/SummaryLevel"
+          },
+          "content": {
+            "$ref": "#/components/schemas/SummaryContent"
+          },
+          "citations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            }
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "required": [
+          "user"
+        ],
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserRead"
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      },
+      "AdminUserCreate": {
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128
+          },
+          "display_name": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 64
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole"
+          }
+        }
+      },
+      "AdminUserUpdate": {
+        "type": "object",
+        "minProperties": 1,
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 64
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole"
+          },
+          "is_active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PasswordReset": {
+        "type": "object",
+        "required": [
+          "new_password"
+        ],
+        "properties": {
+          "new_password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128
+          }
+        }
+      },
+      "AdminPaperUpdate": {
+        "type": "object",
+        "minProperties": 1,
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "authors": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "year": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1900,
+            "maximum": 2100
+          },
+          "venue": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "abstract": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 20000
+          }
+        }
+      },
+      "SummaryGenerateRequest": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "$ref": "#/components/schemas/SummaryLevel"
+          }
+        }
+      },
+      "SearchRequest": {
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "ChatRequest": {
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "RepoCreate": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "default": ""
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/RepoVisibility"
+          }
+        }
+      },
+      "RepoUpdate": {
+        "type": "object",
+        "minProperties": 1,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/RepoVisibility"
+          }
+        }
+      },
+      "RepoPaperAddRequest": {
+        "type": "object",
+        "required": [
+          "paper_ids"
+        ],
+        "properties": {
+          "paper_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "400 业务规则不满足（`bad_request` / `cannot_demote_self` / `cannot_disable_self` / `last_admin` / `cannot_star_own_repo` / `repo_not_public`）",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "401 未登录或会话失效（`unauthorized` / `invalid_credentials`）",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "403 已登录但无权执行该操作（`forbidden`）",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "404 资源不存在，或私有资源无权访问（`not_found` / `paper_not_found` / `session_not_found` / `repo_not_found` / `conversation_not_found` / `summary_not_generated` / `file_not_found` / `user_not_found`）",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "409 冲突或状态不允许（`email_taken` / `repo_name_taken` / `invalid_state` / `paper_not_ready` / `repo_empty` / `no_evidence`）",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "PayloadTooLarge": {
+        "description": "413 上传文件超过大小限制（`file_too_large`）",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "UnsupportedMediaType": {
+        "description": "415 文件类型不支持（`unsupported_media_type`）",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "422 参数校验失败（`validation_error` / `pdf_no_text` / `pdf_too_many_pages`）",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "error": {
+                "code": "validation_error",
+                "message": "请求参数不合法",
+                "details": [
+                  {
+                    "field": "body.email",
+                    "message": "value is not a valid email address"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "BadGateway": {
+        "description": "502 上游模型失败（`llm_failed`）",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "ServiceUnavailable": {
+        "description": "503 数据库、模型或检索服务不可用（`database_unavailable` / `llm_unavailable` / `search_unavailable`）",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "GatewayTimeout": {
+        "description": "504 模型超时或工具循环超限（`llm_timeout` / `tool_loop_exceeded`）",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    }
+  }
+}

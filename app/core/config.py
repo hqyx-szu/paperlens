@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,9 +34,26 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     cookie_samesite: Literal["lax", "strict", "none"] = "lax"
 
+    deepseek_api_key: str | None = None
+    deepseek_base_url: str = "https://api.deepseek.com"
+    deepseek_model: str = "deepseek-chat"
+    llm_timeout_seconds: float = Field(default=60, gt=0)
+    llm_max_tool_steps: int = Field(default=4, ge=1, le=10)
+    llm_max_output_tokens: int = Field(default=2048, ge=1)
+
+    @model_validator(mode="after")
+    def _require_secure_cookie_in_production(self) -> Settings:
+        if self.app_env == "production" and not self.cookie_secure:
+            raise ValueError("生产环境必须设置 COOKIE_SECURE=true")
+        return self
+
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def ai_configured(self) -> bool:
+        return bool(self.deepseek_api_key and self.deepseek_api_key.strip())
 
     def resolved_database_url(self) -> str:
         url = self.test_database_url if self.app_env == "test" else self.database_url

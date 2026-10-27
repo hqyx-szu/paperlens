@@ -1,6 +1,9 @@
-from datetime import datetime
+from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+from app.core.roles import UserRole
+from app.schemas.common import UTCDatetime
 
 
 class UserRead(BaseModel):
@@ -9,18 +12,15 @@ class UserRead(BaseModel):
     id: int
     email: EmailStr
     display_name: str | None
+    role: UserRole
     is_active: bool
-    created_at: datetime
-
-
-class RegisterRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
-    display_name: str | None = Field(default=None, min_length=1, max_length=64)
+    created_at: UTCDatetime
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    model_config = ConfigDict(extra="forbid")
+
+    email: EmailStr = Field(max_length=255)
     password: str = Field(min_length=1, max_length=128)
 
 

@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
 from app.core.exceptions import AppError
+from app.core.roles import UserRole
 from app.core.security import hash_session_token
 from app.core.time import utcnow
 from app.db import get_db
@@ -38,3 +39,11 @@ async def get_current_user(
     session: Annotated[UserSession, Depends(get_current_session)],
 ) -> User:
     return session.user
+
+
+async def require_admin(
+    user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    if user.role != UserRole.admin.value:
+        raise AppError(403, "forbidden", "无权访问")
+    return user

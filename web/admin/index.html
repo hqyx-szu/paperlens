@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PaperLens 管理后台</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --panel: #fff;
+    --border: #e3e8f0;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --danger: #dc2626;
+    --green: #059669;
+    --shadow: 0 1px 3px rgba(15, 23, 42, .08), 0 8px 24px rgba(15, 23, 42, .06);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  button, input, select { font: inherit; }
+  button { cursor: pointer; }
+  .hidden { display: none !important; }
+
+  /* 登录 */
+  .login-wrap {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+  }
+  .login-card {
+    width: 100%;
+    max-width: 380px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    padding: 32px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .logo {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, #2563eb, #7c3aed);
+    display: grid; place-items: center; color: #fff; font-weight: 700;
+  }
+  .brand h1 { font-size: 20px; margin: 0; }
+  .subtitle { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+  input, select {
+    width: 100%; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: #fff; color: var(--text); outline: none;
+  }
+  input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+  .btn {
+    border: 1px solid var(--border); background: #fff; color: var(--text);
+    border-radius: 10px; padding: 9px 14px; transition: .15s;
+  }
+  .btn:hover { border-color: #c7d2fe; background: #f8faff; }
+  .btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
+  .btn-danger { color: var(--danger); border-color: #fecaca; background: #fff5f5; }
+  .btn-sm { padding: 6px 10px; font-size: 12px; border-radius: 8px; }
+  .btn-block { width: 100%; margin-top: 20px; padding: 11px; }
+  .msg { font-size: 13px; margin-top: 12px; min-height: 18px; }
+  .msg.error { color: var(--danger); }
+  .msg.ok { color: var(--green); }
+
+  /* 主界面 */
+  header {
+    background: #fff; border-bottom: 1px solid var(--border);
+    padding: 0 24px; height: 60px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 5;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .header-left strong { font-size: 15px; }
+  .badge {
+    display: inline-flex; align-items: center; padding: 2px 9px;
+    border-radius: 999px; font-size: 12px; font-weight: 600;
+  }
+  .badge-admin { background: #eef2ff; color: #4338ca; }
+  .badge-reader { background: #f1f5f9; color: #475569; }
+  .badge-on { background: #ecfdf5; color: var(--green); }
+  .badge-off { background: #fef2f2; color: var(--danger); }
+  main { max-width: 1180px; margin: 0 auto; padding: 24px; }
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 18px; box-shadow: var(--shadow);
+  }
+  .card .label { font-size: 12px; color: var(--muted); }
+  .card .value { font-size: 28px; font-weight: 700; margin-top: 6px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; box-shadow: var(--shadow); overflow: hidden;
+  }
+  .toolbar {
+    padding: 16px 18px; display: flex; gap: 10px; align-items: center;
+    border-bottom: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .toolbar .spacer { flex: 1; }
+  .search { width: 260px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 12px 18px; text-align: left; font-size: 13px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; background: #fafbfe; font-size: 12px; }
+  tbody tr:hover { background: #fafbff; }
+  td.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pager {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; color: var(--muted); font-size: 13px;
+  }
+  .pager .buttons { display: flex; gap: 8px; }
+  .empty { padding: 40px; text-align: center; color: var(--muted); }
+  code { background: #f1f5f9; padding: 1px 5px; border-radius: 5px; font-size: 12px; }
+
+  /* 弹窗 */
+  dialog {
+    border: none; border-radius: 16px; padding: 0;
+    width: 100%; max-width: 440px; box-shadow: 0 24px 64px rgba(15,23,42,.25);
+  }
+  dialog::backdrop { background: rgba(15, 23, 42, .35); }
+  .dialog-body { padding: 24px; }
+  .dialog-title { margin: 0 0 4px; font-size: 18px; }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+  .toast {
+    position: fixed; right: 24px; bottom: 24px; z-index: 20;
+    background: #111827; color: #fff; padding: 11px 16px; border-radius: 10px;
+    font-size: 13px; box-shadow: var(--shadow); opacity: 0; transform: translateY(8px);
+    transition: .2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { background: #991b1b; }
+  @media (max-width: 860px) {
+    .cards { grid-template-columns: repeat(2, 1fr); }
+    .search { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 登录 -->
+<section id="loginView" class="login-wrap">
+  <form class="login-card" id="loginForm">
+    <div class="brand"><div class="logo">P</div><h1>PaperLens</h1></div>
+    <p class="subtitle">管理后台 · 请使用管理员账号登录</p>
+    <label for="email">邮箱</label>
+    <input id="email" name="email" type="email" autocomplete="username" required placeholder="admin@example.com">
+    <label for="password">密码</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required placeholder="请输入密码">
+    <button class="btn btn-primary btn-block" type="submit" id="loginButton">登录</button>
+    <div class="msg error" id="loginMsg"></div>
+  </form>
+</section>
+
+<!-- 主界面 -->
+<section id="appView" class="hidden">
+  <header>
+    <div class="header-left">
+      <div class="logo" style="width:30px;height:30px;font-size:14px">P</div>
+      <strong>PaperLens 管理后台</strong>
+      <span class="badge badge-admin" id="roleBadge">admin</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="font-size:13px;color:var(--muted)" id="currentUser"></span>
+      <button class="btn btn-sm" id="logoutButton">退出</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="cards">
+      <div class="card"><div class="label">用户总数</div><div class="value" id="statUsersTotal">-</div></div>
+      <div class="card"><div class="label">启用用户</div><div class="value" id="statUsersActive">-</div></div>
+      <div class="card"><div class="label">论文总数</div><div class="value" id="statPapers">-</div></div>
+      <div class="card"><div class="label">仓库总数</div><div class="value" id="statRepos">-</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="toolbar">
+        <input class="search" id="searchInput" placeholder="搜索邮箱或显示名">
+        <button class="btn" id="searchButton">搜索</button>
+        <div class="spacer"></div>
+        <button class="btn btn-primary" id="createButton">+ 创建用户</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:64px">ID</th>
+              <th>邮箱</th>
+              <th>显示名</th>
+              <th style="width:100px">角色</th>
+              <th style="width:90px">状态</th>
+              <th style="width:170px">创建时间</th>
+              <th style="width:330px">操作</th>
+            </tr>
+          </thead>
+          <tbody id="userRows"></tbody>
+        </table>
+      </div>
+      <div class="empty hidden" id="emptyState">没有匹配的用户</div>
+      <div class="pager">
+        <span id="pageInfo">共 0 条</span>
+        <div class="buttons">
+          <button class="btn btn-sm" id="prevButton">上一页</button>
+          <button class="btn btn-sm" id="nextButton">下一页</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</section>
+
+<!-- 创建用户 -->
+<dialog id="createDialog">
+  <form class="dialog-body" id="createForm" method="dialog">
+    <h2 class="dialog-title">创建用户</h2>
+    <p class="subtitle" style="margin-bottom:0">新用户不会自动登录，密码需 8–128 位。</p>
+    <label for="newEmail">邮箱</label>
+    <input id="newEmail" type="email" required placeholder="user@example.com">
+    <label for="newPassword">密码</label>
+    <input id="newPassword" type="password" required minlength="8" maxlength="128" placeholder="至少 8 位">
+    <label for="newDisplayName">显示名（可选）</label>
+    <input id="newDisplayName" maxlength="64" placeholder="留空则取邮箱前缀">
+    <label for="newRole">角色</label>
+    <select id="newRole">
+      <option value="reader">reader（普通用户）</option>
+      <option value="admin">admin（管理员）</option>
+    </select>
+    <div class="msg error" id="createMsg"></div>
+    <div class="dialog-actions">
+      <button class="btn" type="button" id="createCancel">取消</button>
+      <button class="btn btn-primary" type="submit">创建</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 重置密码 -->
+<dialog id="resetDialog">
+  <form class="dialog-body" id="resetForm" method="dialog">
+    <h2 class="dialog-title">重置密码</h2>
+    <p class="subtitle" id="resetTarget" style="margin-bottom:0"></p>
+    <label for="resetPassword">新密码</label>
+    <input id="resetPassword" type="password" required minlength="8" maxlength="128" placeholder="8–128 位">
+    <div class="msg error" id="resetMsg"></div>
+    <div class="dialog-actions">
+      <button class="btn" type="button" id="resetCancel">取消</button>
+      <button class="btn btn-primary" type="submit">确认重置</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const state = {
+  user: null,
+  page: 1,
+  pageSize: 20,
+  q: "",
+  total: 0,
+  resetUserId: null,
+};
+
+const $ = (id) => document.getElementById(id);
+
+function toast(message, isError = false) {
+  const el = $("toast");
+  el.textContent = message;
+  el.className = "toast show" + (isError ? " error" : "");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { el.className = "toast"; }, 2600);
+}
+
+async function api(path, options = {}) {
+  const response = await fetch("/api/v1" + path, {
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  if (response.status === 204) return null;
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data?.error?.message || "请求失败");
+    error.status = response.status;
+    error.code = data?.error?.code;
+    throw error;
+  }
+  return data;
+}
+
+function showLogin(message = "") {
+  state.user = null;
+  $("appView").classList.add("hidden");
+  $("loginView").classList.remove("hidden");
+  $("loginMsg").textContent = message;
+}
+
+function showApp(user) {
+  state.user = user;
+  $("loginView").classList.add("hidden");
+  $("appView").classList.remove("hidden");
+  $("currentUser").textContent = user.display_name || user.email;
+  $("roleBadge").textContent = user.role;
+  $("roleBadge").className = "badge " + (user.role === "admin" ? "badge-admin" : "badge-reader");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[ch]));
+}
+
+function formatTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("zh-CN", { hour12: false });
+}
+
+async function loadStats() {
+  try {
+    const stats = await api("/admin/stats");
+    $("statUsersTotal").textContent = stats.users_total;
+    $("statUsersActive").textContent = stats.users_active;
+    $("statPapers").textContent = stats.papers_total;
+    $("statRepos").textContent = stats.repos_total;
+  } catch (error) {
+    if (error.status === 403) {
+      toast("无权访问管理后台", true);
+      return;
+    }
+    throw error;
+  }
+}
+
+async function loadUsers() {
+  const params = new URLSearchParams({ page: state.page, page_size: state.pageSize });
+  if (state.q) params.set("q", state.q);
+  const data = await api("/admin/users?" + params.toString());
+  state.total = data.total;
+
+  const rows = $("userRows");
+  rows.innerHTML = "";
+  $("emptyState").classList.toggle("hidden", data.items.length !== 0);
+
+  for (const user of data.items) {
+    const tr = document.createElement("tr");
+    const isSelf = state.user && state.user.id === user.id;
+    tr.innerHTML = `
+      <td>${user.id}</td>
+      <td>${escapeHtml(user.email)}${isSelf ? ' <span class="badge badge-admin">我</span>' : ""}</td>
+      <td>${escapeHtml(user.display_name || "-")}</td>
+      <td><span class="badge ${user.role === "admin" ? "badge-admin" : "badge-reader"}">${user.role}</span></td>
+      <td><span class="badge ${user.is_active ? "badge-on" : "badge-off"}">${user.is_active ? "启用" : "停用"}</span></td>
+      <td>${formatTime(user.created_at)}</td>
+      <td class="actions">
+        <button class="btn btn-sm" data-action="name" data-id="${user.id}" data-name="${escapeHtml(user.display_name || "")}">改显示名</button>
+        <button class="btn btn-sm" data-action="role" data-id="${user.id}" data-role="${user.role}">
+          ${user.role === "admin" ? "降为 reader" : "设为 admin"}
+        </button>
+        <button class="btn btn-sm" data-action="active" data-id="${user.id}" data-active="${user.is_active}">
+          ${user.is_active ? "停用" : "启用"}
+        </button>
+        <button class="btn btn-sm" data-action="reset" data-id="${user.id}" data-email="${escapeHtml(user.email)}">重置密码</button>
+      </td>`;
+    rows.appendChild(tr);
+  }
+
+  const pages = Math.max(1, Math.ceil(state.total / state.pageSize));
+  $("pageInfo").textContent = `共 ${state.total} 条 · 第 ${state.page} / ${pages} 页`;
+  $("prevButton").disabled = state.page <= 1;
+  $("nextButton").disabled = state.page >= pages;
+}
+
+async function refresh() {
+  try {
+    await Promise.all([loadStats(), loadUsers()]);
+  } catch (error) {
+    if (error.status === 401) {
+      showLogin("登录已失效，请重新登录");
+      return;
+    }
+    toast(error.message, true);
+  }
+}
+
+async function changeDisplayName(id, currentName) {
+  const value = prompt("新的显示名（留空则清除）", currentName);
+  if (value === null) return;
+  try {
+    await api(`/admin/users/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ display_name: value.trim() || null }),
+    });
+    toast("显示名已更新");
+    await refresh();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function changeRole(id, role) {
+  const nextRole = role === "admin" ? "reader" : "admin";
+  if (!confirm(`确认把用户 ${id} 的角色改为 ${nextRole}？`)) return;
+  try {
+    await api(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify({ role: nextRole }) });
+    toast("角色已更新");
+    await refresh();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function toggleActive(id, active) {
+  if (!confirm(`确认${active ? "停用" : "启用"}用户 ${id}？${active ? "该用户现有登录会立即失效。" : ""}`)) return;
+  try {
+    await api(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify({ is_active: !active }) });
+    toast(active ? "用户已停用" : "用户已启用");
+    await refresh();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+$("loginForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = $("loginButton");
+  button.disabled = true;
+  $("loginMsg").textContent = "";
+  try {
+    const data = await api("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: $("email").value.trim(), password: $("password").value }),
+    });
+    if (data.user.role !== "admin") {
+      await api("/auth/logout", { method: "POST" }).catch(() => {});
+      throw new Error("该账号不是管理员");
+    }
+    showApp(data.user);
+    await refresh();
+  } catch (error) {
+    $("loginMsg").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("logoutButton").addEventListener("click", async () => {
+  try { await api("/auth/logout", { method: "POST" }); } catch (_) { /* ignore */ }
+  showLogin("已退出登录");
+});
+
+$("searchButton").addEventListener("click", () => {
+  state.q = $("searchInput").value.trim();
+  state.page = 1;
+  refresh();
+});
+
+$("searchInput").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") $("searchButton").click();
+});
+
+$("prevButton").addEventListener("click", () => {
+  if (state.page > 1) { state.page -= 1; loadUsers().catch((e) => toast(e.message, true)); }
+});
+
+$("nextButton").addEventListener("click", () => {
+  state.page += 1;
+  loadUsers().catch((e) => toast(e.message, true));
+});
+
+$("userRows").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+  const id = Number(button.dataset.id);
+  if (button.dataset.action === "name") changeDisplayName(id, button.dataset.name);
+  if (button.dataset.action === "role") changeRole(id, button.dataset.role);
+  if (button.dataset.action === "active") toggleActive(id, button.dataset.active === "true");
+  if (button.dataset.action === "reset") {
+    state.resetUserId = id;
+    $("resetTarget").textContent = `账号：${button.dataset.email}。重置后该用户所有设备都需要重新登录。`;
+    $("resetPassword").value = "";
+    $("resetMsg").textContent = "";
+    $("resetDialog").showModal();
+  }
+});
+
+$("createButton").addEventListener("click", () => {
+  $("createForm").reset();
+  $("newRole").value = "reader";
+  $("createMsg").textContent = "";
+  $("createDialog").showModal();
+});
+
+$("createCancel").addEventListener("click", () => $("createDialog").close());
+$("resetCancel").addEventListener("click", () => $("resetDialog").close());
+
+$("createForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  $("createMsg").textContent = "";
+  const payload = {
+    email: $("newEmail").value.trim(),
+    password: $("newPassword").value,
+    role: $("newRole").value,
+  };
+  const displayName = $("newDisplayName").value.trim();
+  if (displayName) payload.display_name = displayName;
+  try {
+    await api("/admin/users", { method: "POST", body: JSON.stringify(payload) });
+    $("createDialog").close();
+    toast("用户已创建");
+    state.page = 1;
+    await refresh();
+  } catch (error) {
+    $("createMsg").textContent = error.message;
+  }
+});
+
+$("resetForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  $("resetMsg").textContent = "";
+  try {
+    await api(`/admin/users/${state.resetUserId}/reset-password`, {
+      method: "POST",
+      body: JSON.stringify({ new_password: $("resetPassword").value }),
+    });
+    $("resetDialog").close();
+    toast("密码已重置，该用户需要重新登录");
+  } catch (error) {
+    $("resetMsg").textContent = error.message;
+  }
+});
+
+(async function init() {
+  try {
+    const user = await api("/auth/me");
+    if (user.role !== "admin") {
+      showLogin("当前账号不是管理员，无法访问管理后台");
+      return;
+    }
+    showApp(user);
+    await refresh();
+  } catch (_) {
+    showLogin();
+  }
+})();
+</script>
+</body>
+</html>
