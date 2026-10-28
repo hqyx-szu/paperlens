@@ -1989,8 +1989,8 @@ uv run python -m scripts.create_admin --email admin@example.com
 | 9 | 列表无分页 | `page/page_size` 或游标 | D1–D5 | 按模块实现 |
 | 10 | 无论文/文件/片段表 | `papers/paper_files/paper_chunks` | D2 | 迁移 `0003_papers` |
 | 11 | 无导入/解析 | `/admin/papers/*` | D2 | 实现 |
-| 12 | 无会话/消息表 | `search_sessions/session_papers/session_evidence/conversations/messages` | D3 | 迁移 `0004_sessions_chat` |
-| 13 | 无搜索/会话/对话 | `/search`、`/sessions/*` | D3 | 实现 |
+| 12 | 已实现会话/消息表 | `search_sessions/session_papers/session_evidence/conversations/messages` | D3 | 迁移 `0004_sessions_chat` |
+| 13 | 已实现搜索/会话/对话 | `/search`、`/sessions/*`、`/papers/{id}/chat/*` | D3 | 实现 |
 | 14 | 无仓库表 | `repos/repo_papers/repo_stars` | D4 | 迁移 `0005_repos` |
 | 15 | 无仓库/Star/Agent | `/repos/*` | D4 | 实现 |
 | 16 | 无四维表 | `paper_summaries` | D5 | 迁移 `0006_paper_summaries` |

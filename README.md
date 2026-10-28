@@ -7,9 +7,10 @@
 - 已完成：FastAPI 骨架、配置/日志/请求 ID、统一错误、健康检查、MySQL 双库、登录/退出/当前用户。
 - 已完成（D1）：`reader` / `admin` 角色、管理员建号/改角色/停用/重置密码、管理总览、管理后台页面（`/admin`）、AI 公共层（DeepSeek 客户端、SSE、工具循环、引用校验）。
 - 已完成（D2）：管理员批量导入 PDF、SHA-256 去重、文本层解析/分页分块、失败重试与归档、就绪论文目录/详情/下载。
+- 已完成（D3）：文字/PDF 全局搜索、会话与证据快照、最近会话/详情/消息游标分页、会话与单篇论文 SSE 对话、引用校验、零构建用户端 `/app`。
 - 账号由管理员创建，不开放自注册；第一个管理员用 CLI 脚本创建。
 - 数据库 schema 由 Alembic 管理（`alembic.ini` + `migrations/`），应用启动不会自动建表。
-- 下一步：D3 PDF 查询与引用。
+- 下一步：D4 仓库、Star 与相关仓库。
 
 ## 本地运行
 
@@ -28,6 +29,7 @@ uv run uvicorn app.main:app --reload
 ```
 
 - 管理后台：http://127.0.0.1:8000/admin （登录页 `/login`，需管理员账号）
+- 用户端演示页：http://127.0.0.1:8000/app （零构建搜索/会话/对话）
 - API 文档：http://127.0.0.1:8000/docs
 - 存活检查：http://127.0.0.1:8000/api/v1/health/live
 - 就绪检查：http://127.0.0.1:8000/api/v1/health/ready
@@ -136,6 +138,14 @@ uv run uvicorn app.main:app --reload
 | GET | `/api/v1/papers` | 用户目录（ready 且未归档，支持 q/分页） |
 | GET | `/api/v1/papers/{id}` | 用户论文详情（归档仍可查看） |
 | GET | `/api/v1/papers/{id}/download` | 下载 PDF（归档仍可下载） |
+| POST | `/api/v1/search` | 文字全局查询，201 会话详情 |
+| POST | `/api/v1/search/pdf` | PDF 文本临时检索，201 会话详情 |
+| GET | `/api/v1/sessions` | 当前用户最近会话 |
+| GET | `/api/v1/sessions/{id}` | 会话详情（论文/证据/对话快照） |
+| GET | `/api/v1/sessions/{id}/messages` | 会话消息游标分页 |
+| POST | `/api/v1/sessions/{id}/chat/stream` | 会话 SSE 对话 |
+| POST | `/api/v1/papers/{id}/chat/stream` | 单篇论文 SSE 对话 |
+| GET | `/api/v1/papers/{id}/messages` | 单篇论文对话历史 |
 
 认证使用 HttpOnly opaque session cookie；会话令牌以 SHA-256 哈希存库，密码使用 scrypt 哈希。
 `/api/v1/admin/*` 全部要求 `role=admin`：普通用户返回 403 `forbidden`，未登录返回 401。
@@ -170,7 +180,16 @@ PAPER_PROCESSING_TIMEOUT_MINUTES=30
 - 失败且未归档论文可重试；就绪论文可归档。归档只影响用户目录，不影响详情/下载。
 - 服务启动时会将超过 `PAPER_PROCESSING_TIMEOUT_MINUTES` 的 `parsing/indexing` 标记为失败（“处理中断，请重试”）。
 
-## AI 公共层
+## 搜索、会话与引用（D3）
+
+- 文字查询使用 MySQL ngram FULLTEXT 检索 `paper_chunks.content`；单字符查询回退到转义后的 `LIKE`。只检索 `ready` 且未归档论文。
+- 单次查询预算：最多 8 篇论文、20 条证据；正文无命中时用标题/摘要命中，并取命中论文前 2 个 chunk 作为证据。
+- 会话保存论文 ID/rank 与证据快照（chunk、页码、quote）；后续新增/归档论文不改变旧会话，详情中的论文元数据取当前值。
+- 回答先生成并缓冲，服务端按正文首次出现顺序校验/重排 `[n]`，最多 12 条引用；无效引用重试一次，仍无有效引用则返回固定拒答文案。
+- SSE 事件顺序：`meta` → `citation` → `token` → `done`；流前错误返回普通 JSON，流中错误发送 `event: error`。断线尽量保存 `stopped` 消息。
+- `/app` 是零构建临时用户端，覆盖登录、文字/PDF 查询、最近会话、三页签、流式对话、停止和引用弹窗；D5 可替换为正式前端。
+- D3 不接 Qdrant/embedding、不做查询翻译、OCR 或四维总结；`related_repo_count` 固定 0，相关仓库由 D4 接入。
+
 
 `app/core/ai/` 供 D2–D5 复用，不依赖具体业务：
 
@@ -204,7 +223,7 @@ uv run alembic check
 uv run alembic downgrade -1
 ```
 
-当前迁移 head 为 `0003_papers`（D1 为 `0002_user_roles`）。`migrations/env.py` 从应用配置读取连接串：默认使用 `DATABASE_URL`，`APP_ENV=test` 时使用 `TEST_DATABASE_URL`。生产环境启动应用前必须先执行 `alembic upgrade head`。
+当前迁移 head 为 `0004_sessions_chat`（D1 为 `0002_user_roles`，D2 为 `0003_papers`）。`migrations/env.py` 从应用配置读取连接串：默认使用 `DATABASE_URL`，`APP_ENV=test` 时使用 `TEST_DATABASE_URL`。生产环境启动应用前必须先执行 `alembic upgrade head`。
 
 如果开发库是之前用 `create_all` 建的空表，可执行一次 `uv run alembic stamp head` 建立基线；新库直接执行 `upgrade head` 即可。
 
