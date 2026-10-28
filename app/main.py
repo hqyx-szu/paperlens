@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -12,11 +13,18 @@ from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.db import reset_engine
+from app.services.paper_processing import recover_stale_papers
+
+logger = logging.getLogger("paperlens.startup")
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     configure_logging(get_settings())
+    try:
+        await recover_stale_papers()
+    except Exception:
+        logger.warning("failed to recover stale papers", exc_info=True)
     yield
     await reset_engine()
 

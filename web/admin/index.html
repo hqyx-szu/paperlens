@@ -138,6 +138,37 @@
   }
   .toast.show { opacity: 1; transform: translateY(0); }
   .toast.error { background: #991b1b; }
+
+  /* 页签与论文目录 */
+  .tabs { display: flex; gap: 4px; margin-left: 24px; }
+  .tab {
+    border: none; border-bottom: 2px solid transparent; background: transparent;
+    color: var(--muted); padding: 19px 12px 17px; font-size: 13px;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+  .paper-title { font-weight: 600; max-width: 300px; word-break: break-word; }
+  .status-badge { display: inline-flex; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .status-queued { background: #f1f5f9; color: #475569; }
+  .status-parsing, .status-indexing { background: #eff6ff; color: #1d4ed8; }
+  .status-ready { background: #ecfdf5; color: var(--green); }
+  .status-failed { background: #fef2f2; color: var(--danger); }
+  .paper-summary { padding: 14px 18px 0; color: var(--muted); font-size: 13px; }
+  .import-results {
+    margin: 16px 18px 0; padding: 12px 14px; border: 1px solid var(--border);
+    border-radius: 10px; background: #fafbfe; font-size: 13px;
+  }
+  .import-results ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
+  .import-results li { margin: 4px 0; }
+  .paper-toolbar select { width: auto; min-width: 120px; }
+  .paper-meta { margin-top: 14px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+  .dialog-wide { max-width: 640px; }
+  textarea {
+    width: 100%; padding: 10px 12px; min-height: 100px; resize: vertical;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: #fff; color: var(--text); outline: none;
+  }
+  textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
   @media (max-width: 860px) {
     .cards { grid-template-columns: repeat(2, 1fr); }
     .search { width: 100%; }
@@ -168,6 +199,10 @@
       <strong>PaperLens 管理后台</strong>
       <span class="badge badge-admin" id="roleBadge">admin</span>
     </div>
+    <nav class="tabs">
+      <button class="tab active" data-view="users">用户管理</button>
+      <button class="tab" data-view="papers">论文目录</button>
+    </nav>
     <div style="display:flex;align-items:center;gap:12px">
       <span style="font-size:13px;color:var(--muted)" id="currentUser"></span>
       <button class="btn btn-sm" id="logoutButton">退出</button>
@@ -175,6 +210,7 @@
   </header>
 
   <main>
+    <section id="usersView">
     <div class="cards">
       <div class="card"><div class="label">用户总数</div><div class="value" id="statUsersTotal">-</div></div>
       <div class="card"><div class="label">启用用户</div><div class="value" id="statUsersActive">-</div></div>
@@ -214,6 +250,63 @@
         </div>
       </div>
     </div>
+    </section>
+
+    <section id="papersView" class="hidden">
+      <div class="paper-summary" id="paperSummary">共 0 篇论文</div>
+      <div class="panel">
+        <div class="toolbar paper-toolbar">
+          <input class="search" id="paperSearchInput" maxlength="200" placeholder="搜索标题或摘要">
+          <select id="paperStatusFilter">
+            <option value="">全部状态</option>
+            <option value="queued">排队</option>
+            <option value="parsing">解析中</option>
+            <option value="indexing">索引中</option>
+            <option value="ready">就绪</option>
+            <option value="failed">失败</option>
+          </select>
+          <select id="paperArchivedFilter">
+            <option value="">全部归档</option>
+            <option value="false">未归档</option>
+            <option value="true">已归档</option>
+          </select>
+          <button class="btn" id="paperSearchButton">搜索</button>
+          <button class="btn" id="paperReloadButton">刷新</button>
+          <div class="spacer"></div>
+          <button class="btn btn-primary" id="paperImportButton">导入 PDF</button>
+          <input class="hidden" id="paperFiles" type="file" multiple accept="application/pdf">
+        </div>
+        <div class="import-results hidden" id="importResults">
+          <strong id="importSummary"></strong>
+          <ul id="importItems"></ul>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:64px">ID</th>
+                <th>标题</th>
+                <th style="width:190px">作者 / 年份</th>
+                <th style="width:100px">状态</th>
+                <th style="width:80px">归档</th>
+                <th style="width:160px">文件名</th>
+                <th style="width:170px">更新时间</th>
+                <th style="width:250px">操作</th>
+              </tr>
+            </thead>
+            <tbody id="paperRows"></tbody>
+          </table>
+        </div>
+        <div class="empty hidden" id="paperEmptyState">没有匹配的论文</div>
+        <div class="pager">
+          <span id="paperPageInfo">共 0 条</span>
+          <div class="buttons">
+            <button class="btn btn-sm" id="paperPrevButton">上一页</button>
+            <button class="btn btn-sm" id="paperNextButton">下一页</button>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 </section>
 
@@ -256,16 +349,49 @@
   </form>
 </dialog>
 
+<!-- 论文详情 / 编辑 -->
+<dialog id="paperDialog" class="dialog-wide">
+  <form class="dialog-body" id="paperForm">
+    <h2 class="dialog-title" id="paperDialogTitle">论文详情</h2>
+    <div class="paper-meta" id="paperMeta"></div>
+    <label for="paperTitle">标题</label>
+    <input id="paperTitle" maxlength="500" required>
+    <label for="paperAuthors">作者（英文逗号分隔）</label>
+    <input id="paperAuthors" maxlength="10000">
+    <label for="paperYear">年份</label>
+    <input id="paperYear" type="number" min="1900" max="2100">
+    <label for="paperVenue">期刊 / 会议</label>
+    <input id="paperVenue" maxlength="255">
+    <label for="paperAbstract">摘要</label>
+    <textarea id="paperAbstract" maxlength="20000"></textarea>
+    <div class="msg error" id="paperMsg"></div>
+    <div class="dialog-actions">
+      <button class="btn" type="button" id="paperCancel">关闭</button>
+      <button class="btn btn-primary hidden" type="submit" id="paperSave">保存</button>
+    </div>
+  </form>
+</dialog>
+
 <div class="toast" id="toast"></div>
 
 <script>
 const state = {
   user: null,
+  view: "users",
   page: 1,
   pageSize: 20,
   q: "",
   total: 0,
   resetUserId: null,
+  paperPage: 1,
+  paperPageSize: 20,
+  paperTotal: 0,
+  paperQ: "",
+  paperStatus: "",
+  paperArchived: "",
+  paperPollTimer: null,
+  editingPaperId: null,
+  paperMode: "view",
 };
 
 const $ = (id) => document.getElementById(id);
@@ -279,9 +405,10 @@ function toast(message, isError = false) {
 }
 
 async function api(path, options = {}) {
+  const isForm = options.body instanceof FormData;
   const response = await fetch("/api/v1" + path, {
     credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
+    headers: isForm ? {} : { "Content-Type": "application/json" },
     ...options,
   });
   if (response.status === 204) return null;
@@ -297,6 +424,14 @@ async function api(path, options = {}) {
 
 function showLogin(message = "") {
   state.user = null;
+  state.view = "users";
+  if (state.paperPollTimer) {
+    clearTimeout(state.paperPollTimer);
+    state.paperPollTimer = null;
+  }
+  document.querySelectorAll(".tab").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.view === "users");
+  });
   $("appView").classList.add("hidden");
   $("loginView").classList.remove("hidden");
   $("loginMsg").textContent = message;
@@ -379,9 +514,105 @@ async function loadUsers() {
   $("nextButton").disabled = state.page >= pages;
 }
 
+const PAPER_STATUS_LABELS = {
+  queued: "排队",
+  parsing: "解析中",
+  indexing: "索引中",
+  ready: "就绪",
+  failed: "失败",
+};
+const PAPER_PROCESSING = ["queued", "parsing", "indexing"];
+
+async function switchView(view) {
+  if (!["users", "papers"].includes(view)) return;
+  state.view = view;
+  if (state.paperPollTimer) {
+    clearTimeout(state.paperPollTimer);
+    state.paperPollTimer = null;
+  }
+  document.querySelectorAll(".tab").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.view === view);
+  });
+  $("usersView").classList.toggle("hidden", view !== "users");
+  $("papersView").classList.toggle("hidden", view !== "papers");
+  try {
+    await refresh();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function loadPapers() {
+  const params = new URLSearchParams({
+    page: state.paperPage,
+    page_size: state.paperPageSize,
+  });
+  if (state.paperQ) params.set("q", state.paperQ);
+  if (state.paperStatus) params.set("status", state.paperStatus);
+  if (state.paperArchived) params.set("archived", state.paperArchived);
+  const data = await api("/admin/papers?" + params.toString());
+  state.paperTotal = data.total;
+  renderPapers(data.items);
+
+  const pages = Math.max(1, Math.ceil(state.paperTotal / state.paperPageSize));
+  $("paperSummary").textContent = `共 ${state.paperTotal} 篇论文`;
+  $("paperPageInfo").textContent =
+    `共 ${state.paperTotal} 条 · 第 ${state.paperPage} / ${pages} 页`;
+  $("paperPrevButton").disabled = state.paperPage <= 1;
+  $("paperNextButton").disabled = state.paperPage >= pages;
+
+  if (state.paperPollTimer) {
+    clearTimeout(state.paperPollTimer);
+    state.paperPollTimer = null;
+  }
+  if (state.view === "papers" && data.items.some((item) => PAPER_PROCESSING.includes(item.status))) {
+    state.paperPollTimer = setTimeout(() => {
+      if (state.view === "papers") loadPapers().catch((error) => toast(error.message, true));
+    }, 3000);
+  }
+}
+
+function renderPapers(items) {
+  const rows = $("paperRows");
+  rows.innerHTML = "";
+  $("paperEmptyState").classList.toggle("hidden", items.length !== 0);
+
+  for (const paper of items) {
+    const tr = document.createElement("tr");
+    const authors = (paper.authors || []).join(", ") || "-";
+    const year = paper.year ?? "-";
+    const status = PAPER_STATUS_LABELS[paper.status] || paper.status;
+    const archived = paper.is_archived
+      ? '<span class="badge badge-off">已归档</span>'
+      : '<span class="badge badge-on">未归档</span>';
+    const canEdit = !PAPER_PROCESSING.includes(paper.status);
+    const actions = [
+      `<button class="btn btn-sm" data-action="view" data-id="${paper.id}">查看</button>`,
+      canEdit ? `<button class="btn btn-sm" data-action="edit" data-id="${paper.id}">编辑</button>` : "",
+      paper.status === "failed" && !paper.is_archived
+        ? `<button class="btn btn-sm" data-action="retry" data-id="${paper.id}">重试</button>`
+        : "",
+      paper.status === "ready" && !paper.is_archived
+        ? `<button class="btn btn-sm" data-action="archive" data-id="${paper.id}">归档</button>`
+        : "",
+    ].join("");
+    tr.innerHTML = `
+      <td>${paper.id}</td>
+      <td><div class="paper-title">${escapeHtml(paper.title)}</div></td>
+      <td>${escapeHtml(authors)}<br><span style="color:var(--muted)">${escapeHtml(year)}</span></td>
+      <td><span class="status-badge status-${paper.status}">${escapeHtml(status)}</span></td>
+      <td>${archived}</td>
+      <td>${escapeHtml(paper.file_name || "-")}</td>
+      <td>${formatTime(paper.updated_at)}</td>
+      <td class="actions">${actions}</td>`;
+    rows.appendChild(tr);
+  }
+}
+
 async function refresh() {
   try {
-    await Promise.all([loadStats(), loadUsers()]);
+    const loader = state.view === "papers" ? loadPapers : loadUsers;
+    await Promise.all([loadStats(), loader()]);
   } catch (error) {
     if (error.status === 401) {
       showLogin("登录已失效，请重新登录");
@@ -424,6 +655,123 @@ async function toggleActive(id, active) {
     await api(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify({ is_active: !active }) });
     toast(active ? "用户已停用" : "用户已启用");
     await refresh();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+function setPaperEditable(editable) {
+  for (const id of ["paperTitle", "paperAuthors", "paperYear", "paperVenue", "paperAbstract"]) {
+    $(id).disabled = !editable;
+  }
+  $("paperSave").classList.toggle("hidden", !editable);
+}
+
+async function openPaperDialog(id, mode) {
+  try {
+    const paper = await api(`/admin/papers/${id}`);
+    state.editingPaperId = paper.id;
+    const editable = mode === "edit" && !PAPER_PROCESSING.includes(paper.status);
+    state.paperMode = editable ? "edit" : "view";
+    $("paperDialogTitle").textContent = editable ? "编辑论文" : "论文详情";
+    $("paperTitle").value = paper.title || "";
+    $("paperAuthors").value = (paper.authors || []).join(", ");
+    $("paperYear").value = paper.year ?? "";
+    $("paperVenue").value = paper.venue || "";
+    $("paperAbstract").value = paper.abstract || "";
+    setPaperEditable(editable);
+    $("paperMsg").textContent = "";
+    const status = PAPER_STATUS_LABELS[paper.status] || paper.status;
+    const file = paper.file
+      ? `${escapeHtml(paper.file.original_filename)} · ${paper.file.size} bytes`
+      : "无文件";
+    $("paperMeta").innerHTML = `
+      <div>状态：<span class="status-badge status-${paper.status}">${escapeHtml(status)}</span>
+        · ${paper.is_archived ? "已归档" : "未归档"} · ${paper.chunk_count} 个片段</div>
+      <div>文件：${file}</div>
+      <div>DOI：${escapeHtml(paper.doi || "-")}</div>
+      ${paper.error_message ? `<div style="color:var(--danger)">错误：${escapeHtml(paper.error_message)}</div>` : ""}`;
+    $("paperDialog").showModal();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function savePaper(event) {
+  event.preventDefault();
+  const id = state.editingPaperId;
+  if (!id || state.paperMode !== "edit") return;
+  const title = $("paperTitle").value.trim();
+  if (!title) {
+    $("paperMsg").textContent = "标题不能为空";
+    return;
+  }
+  const authors = $("paperAuthors").value
+    .split(/[,，]/)
+    .map((name) => name.trim())
+    .filter(Boolean);
+  const yearText = $("paperYear").value.trim();
+  const payload = {
+    title,
+    authors,
+    year: yearText ? Number(yearText) : null,
+    venue: $("paperVenue").value.trim() || null,
+    abstract: $("paperAbstract").value.trim() || null,
+  };
+  try {
+    await api(`/admin/papers/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+    $("paperDialog").close();
+    toast("论文元数据已更新");
+    await Promise.all([loadPapers(), loadStats()]);
+  } catch (error) {
+    $("paperMsg").textContent = error.message;
+  }
+}
+
+async function retryPaper(id) {
+  if (!confirm(`确认重试论文 ${id}？`)) return;
+  try {
+    await api(`/admin/papers/${id}/retry`, { method: "POST" });
+    toast("已重新排队");
+    await Promise.all([loadPapers(), loadStats()]);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function archivePaper(id) {
+  if (!confirm(`确认归档论文 ${id}？归档后仍可查看和下载，但不会出现在用户目录。`)) return;
+  try {
+    await api(`/admin/papers/${id}/archive`, { method: "POST" });
+    toast("论文已归档");
+    await Promise.all([loadPapers(), loadStats()]);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function importPapers(fileList) {
+  const files = Array.from(fileList || []);
+  if (!files.length) return;
+  const form = new FormData();
+  for (const file of files) form.append("files", file);
+  try {
+    const data = await api("/admin/papers/import", { method: "POST", body: form });
+    $("importResults").classList.remove("hidden");
+    $("importSummary").textContent =
+      `导入完成：新建 ${data.created}，重复 ${data.duplicates}，拒绝 ${data.rejected}`;
+    $("importItems").innerHTML = data.items
+      .map((item) => {
+        const suffix = item.duplicate
+          ? "（已存在）"
+          : item.error
+            ? `（${item.error}）`
+            : "";
+        return `<li>${escapeHtml(item.filename)}${escapeHtml(suffix)}</li>`;
+      })
+      .join("");
+    $("paperFiles").value = "";
+    await Promise.all([loadPapers(), loadStats()]);
   } catch (error) {
     toast(error.message, true);
   }
@@ -537,6 +885,63 @@ $("resetForm").addEventListener("submit", async (event) => {
     $("resetMsg").textContent = error.message;
   }
 });
+
+document.querySelectorAll(".tab").forEach((tab) => {
+  tab.addEventListener("click", () => switchView(tab.dataset.view));
+});
+
+$("paperSearchButton").addEventListener("click", () => {
+  state.paperQ = $("paperSearchInput").value.trim();
+  state.paperPage = 1;
+  loadPapers().catch((error) => toast(error.message, true));
+});
+
+$("paperSearchInput").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") $("paperSearchButton").click();
+});
+
+$("paperStatusFilter").addEventListener("change", () => {
+  state.paperStatus = $("paperStatusFilter").value;
+  state.paperPage = 1;
+  loadPapers().catch((error) => toast(error.message, true));
+});
+
+$("paperArchivedFilter").addEventListener("change", () => {
+  state.paperArchived = $("paperArchivedFilter").value;
+  state.paperPage = 1;
+  loadPapers().catch((error) => toast(error.message, true));
+});
+
+$("paperReloadButton").addEventListener("click", () => {
+  loadPapers().catch((error) => toast(error.message, true));
+});
+
+$("paperPrevButton").addEventListener("click", () => {
+  if (state.paperPage > 1) {
+    state.paperPage -= 1;
+    loadPapers().catch((error) => toast(error.message, true));
+  }
+});
+
+$("paperNextButton").addEventListener("click", () => {
+  state.paperPage += 1;
+  loadPapers().catch((error) => toast(error.message, true));
+});
+
+$("paperRows").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+  const id = Number(button.dataset.id);
+  if (button.dataset.action === "view") openPaperDialog(id, "view");
+  if (button.dataset.action === "edit") openPaperDialog(id, "edit");
+  if (button.dataset.action === "retry") retryPaper(id);
+  if (button.dataset.action === "archive") archivePaper(id);
+});
+
+$("paperImportButton").addEventListener("click", () => $("paperFiles").click());
+$("paperFiles").addEventListener("change", () => importPapers($("paperFiles").files));
+$("paperCancel").addEventListener("click", () => $("paperDialog").close());
+$("paperForm").addEventListener("submit", savePaper);
 
 (async function init() {
   try {

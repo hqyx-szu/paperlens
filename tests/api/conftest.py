@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -10,6 +10,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from app.core.config import get_settings
 from app.core.roles import UserRole
 from app.core.security import hash_password
 from app.db import get_engine, get_session_factory, reset_engine
@@ -55,12 +56,26 @@ async def prepare_database(migrate_database: None) -> AsyncIterator[None]:
     async with engine.begin() as conn:
         await conn.execute(text("SET FOREIGN_KEY_CHECKS=0"))
         for table in reversed(Base.metadata.sorted_tables):
-            await conn.execute(text(f"TRUNCATE TABLE `{table.name}`"))
+            await conn.execute(text(f"DELETE FROM `{table.name}`"))
+        # 旧测试按 /users/1 访问管理员，清空后重置 users 自增。
+        await conn.execute(text("ALTER TABLE users AUTO_INCREMENT = 1"))
         await conn.execute(text("SET FOREIGN_KEY_CHECKS=1"))
     try:
         yield
     finally:
         await reset_engine()
+
+
+@pytest.fixture(autouse=True)
+def paper_storage_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[Path]:
+    root = tmp_path / "papers"
+    monkeypatch.setenv("PAPER_STORAGE_DIR", str(root))
+    get_settings.cache_clear()
+    yield root
+    get_settings.cache_clear()
 
 
 @pytest.fixture

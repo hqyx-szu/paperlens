@@ -9,11 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
 from app.core.exceptions import AppError
+from app.core.papers import PROCESSING_STATUSES, PaperStatus
 from app.core.roles import UserRole
 from app.core.security import hash_password
 from app.core.time import utcnow
 from app.db import get_db
-from app.models import User, UserSession
+from app.models import Paper, User, UserSession
 from app.schemas import (
     AdminStats,
     AdminUserCreate,
@@ -172,15 +173,52 @@ async def admin_stats(
         await db.scalar(select(func.count()).select_from(User).where(User.is_active.is_(True))) or 0
     )
 
-    # 论文（D2）与仓库（D4）的表尚未合并，先返回 0；表落地后在此补计数。
+    papers_total = await db.scalar(select(func.count()).select_from(Paper)) or 0
+    papers_ready = (
+        await db.scalar(
+            select(func.count()).select_from(Paper).where(Paper.status == PaperStatus.ready.value)
+        )
+    ) or 0
+    papers_processing = (
+        await db.scalar(
+            select(func.count())
+            .select_from(Paper)
+            .where(
+                Paper.status.in_(PROCESSING_STATUSES),
+                Paper.is_archived.is_(False),
+            )
+        )
+    ) or 0
+    papers_failed = (
+        await db.scalar(
+            select(func.count())
+            .select_from(Paper)
+            .where(
+                Paper.status == PaperStatus.failed.value,
+                Paper.is_archived.is_(False),
+            )
+        )
+    ) or 0
+    papers_archived = (
+        await db.scalar(
+            select(func.count())
+            .select_from(Paper)
+            .where(
+                Paper.status == PaperStatus.ready.value,
+                Paper.is_archived.is_(True),
+            )
+        )
+    ) or 0
+
+    # 仓库（D4）尚未落地，先保持 0。
     return AdminStats(
         users_total=users_total,
         users_active=users_active,
-        papers_total=0,
-        papers_ready=0,
-        papers_processing=0,
-        papers_failed=0,
-        papers_archived=0,
+        papers_total=papers_total,
+        papers_ready=papers_ready,
+        papers_processing=papers_processing,
+        papers_failed=papers_failed,
+        papers_archived=papers_archived,
         repos_total=0,
         repos_private=0,
         generated_at=utcnow(),

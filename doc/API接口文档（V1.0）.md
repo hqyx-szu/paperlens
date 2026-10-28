@@ -1,9 +1,9 @@
-# PaperLens API 接口文档（V1.1）
+# PaperLens API 接口文档（V1.2）
 
-> 文档版本：1.1（V1.0 勘误与补全）
-> 文件说明：文件名沿用 V1.0 以保持既有引用；内容版本为 1.1。
+> 文档版本：1.2（正文级重复复核）
+> 文件说明：文件名沿用 V1.0 以保持既有引用；内容版本为 1.2。
 > 状态：**目标契约（Target Contract）**，用于前后端并行开发、测试和验收
-> 日期：2026-10-26
+> 日期：2026-10-26（初版）；2026-10-28（1.2 修订）
 > 代码基线：P001（`0001_auth_tables`，13 个测试通过）
 > 语义来源：`doc/产品功能设计文档（V1.0）.md`、`doc/用户故事文档（V1.0）.md`
 > 机器可读契约：应用启动后访问 `/openapi.json`；本文档是人工契约，二者不一致时以本文档为准，并由实现方修正代码
@@ -225,6 +225,7 @@
 - `POST /repos/{id}/star`、`DELETE /repos/{id}/star`、`DELETE /repos/{id}/papers/{paper_id}` 是幂等的。
 - 重复添加论文到仓库：忽略，返回在 `ignored` 中。
 - 重复导入同一文件：按 SHA-256 识别，复用已有论文，`duplicate=true`。
+- 正文重复复核：解析完成后，若正文（逐页规范化文本按 `\n` 拼接后的 SHA-256，即 `papers.content_hash`）与另一篇未归档的 `ready` 论文相同，该论文置为 `failed`，原因写「与已有论文重复：《标题》（ID n）」，且不写入原文片段。
 - 同一四维级别并发生成：允许重复调用模型，最终只保留一份缓存；后写覆盖先写。
 - 更新接口采用最后写入生效（last-write-wins），不提供 ETag/If-Match。
 
@@ -1025,6 +1026,7 @@ uv run python -m scripts.create_admin --email admin@example.com
 - 处理中的论文不出现在用户端 `GET /papers`、全局搜索、可加入仓库列表中。
 - 所有“新搜索/新加仓库”入口必须走统一的 `visible_papers()` 条件：`status=ready AND is_archived=false`；详情/下载/四维/对话对归档论文单独放行。
 - 解析只支持带文本层的 PDF；扫描件/图片型 PDF 直接失败，不做 OCR。
+- 正文重复：解析结果与已存在的未归档 `ready` 论文正文完全一致（`content_hash` 相同）时置为 `failed`，原因写「与已有论文重复：《标题》（ID n）」；此类论文没有原文片段，且按归档规则不能用 `archive` 处理（归档只接受 `ready`），管理员可忽略或重试（重试仍会判重）。
 - **`ready` 不变量**：一篇论文只有在文件已保存、至少抽取到一个文本片段、索引完成时才允许标记 `ready`。否则必须是 `failed`。因此正常数据下 `ready`（含归档）论文可下载、可对话、可生成四维；若运维手工删除了存储文件，`can_download` 会变为 false，需修复文件。
 - 归档不改变 `status`；归档论文始终是 `ready`。
 
@@ -2137,6 +2139,7 @@ if (!res.ok) {
 | --- | --- | --- |
 | 1.0 | 2026-10-26 | 初版：覆盖 V1.0 P0 全部接口、SSE、权限、错误码、需求追踪、当前代码差异 |
 | 1.1 | 2026-10-26 | 勘误与补全：① `error.details` 始终返回、无值为 null；② 补齐 SSE 流前 502/504 与流前错误不落库；③ 修正 `PaperStatus` 重试方向；④ 增加 `RepoScope`、`RepoPaperAddReason` 枚举与模型索引；⑤ 补齐仓库权限真值表、公开仓库他人对话 403/404 规则、可见性变更影响；⑥ 补齐 PDF 查询 2000 字符、导入请求级校验顺序与拒绝项字段、论文初始标题；⑦ 补齐分页 `has_more`、排序 null、空值/清空语义；⑧ 增加 `owner_email`、缓存键、处理超时、四维 404/409 优先级；⑨ 增加与其他文档的差异表与验收项；⑩ 补齐 PDF 查询缺文件 422、消息空列表与资源 404 的边界、私有仓库写操作 404 优先级、Star 权限矩阵与验收口径、未知请求字段 422 |
+| 1.2 | 2026-10-28 | 增加正文级重复复核：文件级判重仍按导入时 SHA-256；解析完成后 `papers.content_hash` 命中另一篇未归档 `ready` 论文时置 `failed`，原因「与已有论文重复：《标题》（ID n）」，不写原文片段；说明此类论文不能用 `archive`（仅接受 `ready`） |
 
 ---
 
@@ -2161,6 +2164,7 @@ if (!res.ok) {
    - `PATCH /admin/users/{id}` 空对象 → 400；`display_name:null` 清空；最后可用管理员保护；
    - `PATCH /admin/papers/{id}` 处理中 → 409；`year/venue/abstract:null` 清空；`authors:[]` 清空；
    - 导入：文件数 0/>20 → 422；总大小 >100MB → 413；被拒绝项五个字段固定；`created+duplicates+rejected=items.length`；
+   - 正文重复：上传同一论文的两份 PDF（字节不同、正文一致）→ 第二份 `failed`，原因「与已有论文重复：《标题》（ID n）」，且无原文片段；
    - `GET /repos/related` 不被 `/repos/{repo_id}` 吞掉；空会话返回空页；
    - 自己的公开仓库 `is_starred=false`；创建者/管理员对私有仓库 star → 400，无权限用户 → 404；管理员（非创建者）公开仓库他人对话 → 403；
    - `POST /repos/{id}/papers` 的 `ignored.reason` 顺序与请求顺序；

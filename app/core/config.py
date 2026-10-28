@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, model_validator
@@ -28,6 +29,9 @@ class Settings(BaseSettings):
 
     database_url: str | None = None
     test_database_url: str | None = None
+
+    paper_storage_dir: Path = Path("var/papers")
+    paper_processing_timeout_minutes: int = Field(default=30, ge=1)
 
     session_cookie_name: str = "paperlens_session"
     session_ttl_days: int = Field(default=7, ge=1)
