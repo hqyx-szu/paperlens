@@ -11,14 +11,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user
+from app.api.v1.endpoints.sessions import _chat_events
+from app.core.ai import get_llm_client, sse_response, with_heartbeat
+from app.core.chat import ChatScope, MessageRole, MessageStatus
 from app.core.config import get_settings
 from app.core.exceptions import AppError
 from app.core.papers import PaperStatus
 from app.db import get_db
-from app.models import Paper, PaperChunk
-from app.schemas import PaperBrief, PaperDetail, PaperPage
+from app.models import Conversation, Message, Paper, PaperChunk, User
+from app.schemas import MessagePage, PaperBrief, PaperDetail, PaperPage
+from app.schemas.chat import ChatRequest
+from app.services.chat import (
+    build_chat_messages,
+    get_or_create_conversation,
+    load_paper_evidence,
+)
 from app.services.paper_queries import visible_paper_conditions
 from app.services.paper_storage import PaperStorage
+from app.services.session_service import list_messages
 
 router = APIRouter(
     prefix="/papers",
@@ -133,4 +143,114 @@ async def download_paper(
         path,
         media_type="application/pdf",
         headers={"Content-Disposition": disposition},
+    )
+
+
+async def _ready_paper(db: AsyncSession, paper_id: int) -> Paper:
+    paper = await db.scalar(
+        select(Paper).where(
+            Paper.id == paper_id,
+            Paper.status == PaperStatus.ready.value,
+        )
+    )
+    if paper is None:
+        raise AppError(404, "paper_not_found", "论文不存在")
+    return paper
+
+
+@router.post("/{paper_id}/chat/stream")
+async def paper_chat(
+    paper_id: Annotated[int, Path(ge=1)],
+    payload: ChatRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+):
+    await _ready_paper(db, paper_id)
+    if not await db.scalar(select(exists().where(PaperChunk.paper_id == paper_id))):
+        raise AppError(409, "paper_not_ready", "论文还没有可对话的片段")
+
+    evidence = await load_paper_evidence(db, paper_id=paper_id, question=payload.message)
+    if not evidence:
+        raise AppError(409, "paper_not_ready", "论文还没有可对话的片段")
+
+    client = get_llm_client()
+    conversation = await get_or_create_conversation(
+        db,
+        user_id=user.id,
+        scope=ChatScope.paper,
+        scope_id=paper_id,
+    )
+    history = list(
+        (
+            await db.scalars(
+                select(Message)
+                .where(
+                    Message.conversation_id == conversation.id,
+                    Message.role != MessageRole.system.value,
+                )
+                .order_by(Message.id.desc())
+                .limit(12)
+            )
+        ).all()
+    )[::-1]
+    messages = build_chat_messages(
+        scope=ChatScope.paper,
+        evidence=evidence,
+        history=history,
+        question=payload.message,
+    )
+    retry_messages = build_chat_messages(
+        scope=ChatScope.paper,
+        evidence=evidence,
+        history=history,
+        question=payload.message,
+        retry=True,
+    )
+    user_message = Message(
+        conversation_id=conversation.id,
+        role=MessageRole.user.value,
+        content=payload.message,
+        status=MessageStatus.complete.value,
+        citations=[],
+    )
+    db.add(user_message)
+    await db.commit()
+    await db.refresh(user_message)
+
+    events = _chat_events(
+        client=client,
+        messages=messages,
+        retry_messages=retry_messages,
+        evidence=evidence,
+        conversation_id=conversation.id,
+        user_message_id=user_message.id,
+        scope=ChatScope.paper,
+        scope_id=paper_id,
+    )
+    return sse_response(with_heartbeat(events))
+
+
+@router.get("/{paper_id}/messages", response_model=MessagePage)
+async def get_paper_messages(
+    paper_id: Annotated[int, Path(ge=1)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    before_id: Annotated[int | None, Query(ge=1)] = None,
+) -> MessagePage:
+    await _ready_paper(db, paper_id)
+    conversation = await db.scalar(
+        select(Conversation).where(
+            Conversation.user_id == user.id,
+            Conversation.scope_type == ChatScope.paper.value,
+            Conversation.scope_id == paper_id,
+        )
+    )
+    if conversation is None:
+        return MessagePage(items=[], has_more=False, next_before_id=None)
+    return await list_messages(
+        db,
+        conversation_id=conversation.id,
+        limit=limit,
+        before_id=before_id,
     )
