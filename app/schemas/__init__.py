@@ -6,6 +6,15 @@ from app.schemas.admin import (
     PasswordReset,
 )
 from app.schemas.auth import AuthResponse, LoginRequest, UserRead
+from app.schemas.chat import (
+    ChatRequest,
+    MessagePage,
+    MessageRead,
+    SearchRequest,
+    SessionDetail,
+    SessionPage,
+    SessionSummary,
+)
 from app.schemas.paper import (
     AdminPaperDetail,
     AdminPaperListItem,
@@ -30,14 +39,21 @@ __all__ = [
     "AdminUserPage",
     "AdminUserUpdate",
     "AuthResponse",
+    "ChatRequest",
     "ImportItem",
     "ImportResponse",
     "LoginRequest",
+    "MessagePage",
+    "MessageRead",
     "PaperBrief",
     "PaperDetail",
     "PaperFileRead",
     "PaperPage",
     "PasswordReset",
+    "SearchRequest",
+    "SessionDetail",
+    "SessionPage",
+    "SessionSummary",
     "SummaryLevel",
     "UserRead",
 ]
