@@ -41,10 +41,15 @@ class FakeLLMClient:
         self,
         responses: list[LLMResponse] | None = None,
         stream_parts: list[str] | None = None,
+        stream_sequences: list[list[str]] | None = None,
+        stream_error: Exception | None = None,
     ) -> None:
         self.responses = list(responses or [])
         self.stream_parts = stream_parts or ["回答", "[1]"]
+        self.stream_sequences = list(stream_sequences or [])
+        self.stream_error = stream_error
         self.calls: list[tuple[list[dict[str, Any]], list[dict[str, Any]] | None]] = []
+        self.stream_calls: list[list[dict[str, Any]]] = []
 
     async def complete(
         self,
@@ -55,5 +60,9 @@ class FakeLLMClient:
         return self.responses.pop(0)
 
     async def stream(self, messages: list[dict[str, Any]]) -> AsyncIterator[str]:
-        for part in self.stream_parts:
+        self.stream_calls.append(messages)
+        if self.stream_error is not None:
+            raise self.stream_error
+        parts = self.stream_sequences.pop(0) if self.stream_sequences else self.stream_parts
+        for part in parts:
             yield part
