@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 
 from app.core.chat import ChatScope, MessageRole, QueryType
 from app.core.papers import PaperStatus
+from app.core.roles import UserRole
 from app.db import get_session_factory
 from app.models import (
     Conversation,
@@ -17,6 +18,7 @@ from app.models import (
     SessionPaper,
 )
 from app.services.search import SearchResult, create_search_session, search_catalog
+from tests.api.conftest import login
 
 
 async def _create_paper(
@@ -281,3 +283,124 @@ async def test_create_empty_session_has_conversation_and_system_message(user_fac
         message = await db.scalar(select(Message).where(Message.conversation_id == conversation.id))
         assert message is not None
         assert message.content == system_message
+
+
+async def test_search_requires_login(client) -> None:
+    response = await client.post("/api/v1/search", json={"query": "x"})
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "unauthorized"
+
+
+async def test_search_returns_201_session_detail(reader_client) -> None:
+    paper = await _create_paper("Attention", chunks=[(1, "transformer evidence")])
+
+    response = await reader_client.post("/api/v1/search", json={"query": "transformer"})
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["query"] == "transformer"
+    assert body["query_type"] == "text"
+    assert body["paper_count"] == 1
+    assert body["evidence_count"] >= 1
+    assert body["has_evidence"] is True
+    assert body["related_repo_count"] == 0
+    assert body["conversation_id"] > 0
+    assert body["system_message"]
+    assert [item["id"] for item in body["papers"]] == [paper.id]
+    assert body["created_at"].endswith("Z")
+
+
+async def test_search_empty_creates_empty_session(reader_client) -> None:
+    response = await reader_client.post(
+        "/api/v1/search",
+        json={"query": "no-such-query-term"},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["papers"] == []
+    assert body["paper_count"] == 0
+    assert body["evidence_count"] == 0
+    assert body["has_evidence"] is False
+    assert body["system_message"] == (
+        "没有找到足够证据回答这次查询。你可以修改查询，或去公开仓库看看。"
+    )
+
+
+async def test_search_validation(reader_client) -> None:
+    for payload in (
+        {"query": ""},
+        {"query": "   "},
+        {"query": "x" * 2001},
+        {"query": "x", "extra": 1},
+    ):
+        response = await reader_client.post("/api/v1/search", json=payload)
+        assert response.status_code == 422, payload
+        assert response.json()["error"]["code"] == "validation_error"
+
+
+async def test_search_is_owner_only(
+    reader_client,
+    make_client,
+    user_factory,
+) -> None:
+    await _create_paper("Owner paper", chunks=[(1, "owner evidence")])
+    response = await reader_client.post("/api/v1/search", json={"query": "owner"})
+    assert response.status_code == 201
+    session_id = response.json()["id"]
+
+    other_user = await user_factory(email="other@example.com")
+    other_client = await make_client()
+    await login(other_client, other_user.email)
+    response = await other_client.get(f"/api/v1/sessions/{session_id}")
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "session_not_found"
+
+    admin = await user_factory(email="other-admin@example.com", role=UserRole.admin)
+    admin_client = await make_client()
+    await login(admin_client, admin.email)
+    response = await admin_client.get(f"/api/v1/sessions/{session_id}")
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "session_not_found"
+
+
+async def test_search_snapshot_ignores_later_catalog_changes(reader_client) -> None:
+    first = await _create_paper("First", chunks=[(1, "snapshot evidence")])
+    response = await reader_client.post("/api/v1/search", json={"query": "snapshot"})
+    assert response.status_code == 201
+    session_id = response.json()["id"]
+
+    await _create_paper("Second", chunks=[(1, "snapshot evidence")])
+    async with get_session_factory()() as db:
+        stored = await db.get(Paper, first.id)
+        assert stored is not None
+        stored.is_archived = True
+        await db.commit()
+
+    response = await reader_client.get(f"/api/v1/sessions/{session_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["id"] for item in body["papers"]] == [first.id]
+    assert body["papers"][0]["is_archived"] is True
+
+
+async def test_search_sql_error_returns_503_without_session(reader_client, monkeypatch) -> None:
+    from sqlalchemy.exc import SQLAlchemyError
+
+    async def _broken(*args, **kwargs):
+        raise SQLAlchemyError("broken")
+
+    monkeypatch.setattr("app.api.v1.endpoints.search.search_catalog", _broken)
+
+    response = await reader_client.post("/api/v1/search", json={"query": "anything"})
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "search_unavailable"
+    assert await _count_sessions() == 0
+
+
+async def test_search_route_is_registered(app) -> None:
+    paths = set(app.openapi()["paths"])
+    assert "/api/v1/search" in paths
+    assert "/api/v1/sessions/{session_id}" in paths
