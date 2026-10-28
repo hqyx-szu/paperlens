@@ -51,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(api_router, prefix=settings.api_v1_prefix)
 
     admin_ui = Path(__file__).resolve().parent.parent / "web" / "admin" / "index.html"
+    app_ui = Path(__file__).resolve().parent.parent / "web" / "app" / "index.html"
 
     @app.get("/", tags=["meta"])
     async def root() -> dict[str, str]:
@@ -68,6 +69,13 @@ def create_app() -> FastAPI:
         @app.get("/login", include_in_schema=False)
         async def admin_page() -> FileResponse:
             return FileResponse(admin_ui)
+
+    if app_ui.is_file():
+
+        @app.get("/app", include_in_schema=False)
+        @app.get("/app/", include_in_schema=False)
+        async def app_page() -> FileResponse:
+            return FileResponse(app_ui)
 
     return app
 

@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PaperLens</title>
+<style>
+  :root {
+    --bg: #f5f7fb; --panel: #fff; --border: #e3e8f0; --text: #1f2937; --muted: #6b7280;
+    --primary: #2563eb; --primary-dark: #1d4ed8; --danger: #dc2626; --green: #059669;
+    --shadow: 0 1px 3px rgba(15, 23, 42, .08), 0 8px 24px rgba(15, 23, 42, .06);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text);
+  }
+  button, input, textarea { font: inherit; }
+  button { cursor: pointer; }
+  .hidden { display: none !important; }
+  .login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+  .login-card {
+    width: 100%; max-width: 380px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; box-shadow: var(--shadow); padding: 32px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .logo {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, #2563eb, #7c3aed);
+    display: grid; place-items: center; color: #fff; font-weight: 700;
+  }
+  .brand h1 { font-size: 20px; margin: 0; }
+  .subtitle { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+  input, textarea {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+    background: #fff; color: var(--text); outline: none;
+  }
+  input:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+  textarea { min-height: 72px; resize: vertical; }
+  .btn {
+    border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 10px;
+    padding: 9px 14px; transition: .15s; text-decoration: none; display: inline-block;
+  }
+  .btn:hover { border-color: #c7d2fe; background: #f8faff; }
+  .btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
+  .btn-danger { color: var(--danger); border-color: #fecaca; background: #fff5f5; }
+  .btn-sm { padding: 6px 10px; font-size: 12px; border-radius: 8px; }
+  .btn-block { width: 100%; margin-top: 20px; padding: 11px; }
+  .msg { font-size: 13px; margin-top: 12px; min-height: 18px; }
+  .msg.error { color: var(--danger); }
+  .msg.ok { color: var(--green); }
+  header {
+    background: #fff; border-bottom: 1px solid var(--border); padding: 0 24px; height: 60px;
+    display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 5;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .header-left strong { font-size: 15px; }
+  .badge {
+    display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; background: #f1f5f9; color: #475569;
+  }
+  main { max-width: 1120px; margin: 0 auto; padding: 24px; }
+  .hero {
+    background: linear-gradient(120deg, #eff6ff, #f5f3ff); border: 1px solid #dbeafe;
+    border-radius: 16px; padding: 22px; margin-bottom: 20px;
+  }
+  .hero h2 { margin: 0 0 6px; font-size: 22px; }
+  .hero p { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+  .search-row { display: flex; gap: 10px; }
+  .search-row input { flex: 1; }
+  .file-row { margin-top: 10px; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: var(--shadow); overflow: hidden;
+  }
+  .panel-head {
+    padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex;
+    align-items: center; justify-content: space-between; gap: 10px;
+  }
+  .panel-head h3 { margin: 0; font-size: 15px; }
+  .panel-body { padding: 18px; }
+
+  .session-list { display: grid; gap: 10px; }
+  .session-item {
+    border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: #fff;
+    display: flex; justify-content: space-between; gap: 12px; align-items: center;
+  }
+  .session-item:hover { border-color: #bfdbfe; background: #f8faff; }
+  .session-query { font-weight: 600; word-break: break-word; }
+  .session-meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .empty { padding: 34px; text-align: center; color: var(--muted); font-size: 14px; }
+  .back-btn { margin-bottom: 12px; }
+  .session-summary {
+    background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px;
+    box-shadow: var(--shadow);
+  }
+  .session-summary h2 { margin: 0 0 6px; font-size: 20px; word-break: break-word; }
+  .session-stats { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-top: 16px; }
+  .tab {
+    border: none; border-bottom: 2px solid transparent; background: transparent;
+    color: var(--muted); padding: 12px; font-size: 13px;
+  }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+  .tab-panel { padding-top: 16px; }
+  .papers { display: grid; gap: 10px; }
+  .paper-card { border: 1px solid var(--border); border-radius: 12px; padding: 13px 15px; }
+  .paper-title { font-weight: 600; }
+  .paper-meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .chat-panel { display: flex; flex-direction: column; min-height: 380px; }
+  .messages { padding: 16px; display: flex; flex-direction: column; gap: 12px; max-height: 520px; overflow-y: auto; }
+  .bubble { max-width: 82%; border-radius: 14px; padding: 10px 13px; font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+  .bubble.user { align-self: flex-end; background: #dbeafe; }
+  .bubble.assistant { align-self: flex-start; background: #f8fafc; border: 1px solid var(--border); }
+  .bubble.system { align-self: center; background: #f1f5f9; color: var(--muted); font-size: 13px; max-width: 92%; }
+  .bubble.error { background: #fff5f5; border-color: #fecaca; color: var(--danger); }
+  .citation-btn {
+    border: none; background: #eef2ff; color: #4338ca; border-radius: 5px;
+    padding: 0 4px; margin: 0 1px; font-size: 11px; font-weight: 700; vertical-align: super;
+  }
+  .chat-input { border-top: 1px solid var(--border); padding: 12px; display: flex; gap: 8px; align-items: flex-end; }
+  .chat-input textarea { min-height: 42px; max-height: 120px; }
+  .chat-input .btn { flex: none; }
+  .chat-hint { color: var(--muted); font-size: 12px; padding: 0 12px 10px; }
+  .placeholder { padding: 28px; color: var(--muted); text-align: center; font-size: 14px; }
+  dialog { border: none; border-radius: 16px; padding: 0; width: 100%; max-width: 520px; box-shadow: 0 24px 64px rgba(15,23,42,.25); }
+  dialog::backdrop { background: rgba(15, 23, 42, .35); }
+  .dialog-body { padding: 22px; }
+  .dialog-title { margin: 0 0 10px; font-size: 18px; }
+  .dialog-meta { color: var(--muted); font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
+  .dialog-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
+  .toast {
+    position: fixed; right: 24px; bottom: 24px; z-index: 20; background: #111827; color: #fff;
+    padding: 11px 16px; border-radius: 10px; font-size: 13px; box-shadow: var(--shadow);
+    opacity: 0; transform: translateY(8px); transition: .2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { background: #991b1b; }
+  @media (max-width: 860px) {
+    main { padding: 16px; }
+    .search-row { flex-direction: column; }
+    .session-item { flex-direction: column; align-items: flex-start; }
+    .bubble { max-width: 94%; }
+  }
+</style>
+</head>
+<body>
+
+<section id="loginView" class="login-wrap">
+  <form class="login-card" id="loginForm">
+    <div class="brand"><span class="logo">P</span><h1>PaperLens</h1></div>
+    <p class="subtitle">搜索论文，基于证据对话。</p>
+    <label for="email">邮箱</label>
+    <input id="email" type="email" autocomplete="username" required>
+    <label for="password">密码</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <button class="btn btn-primary btn-block" type="submit" id="loginButton">登录</button>
+    <div class="msg error" id="loginMsg"></div>
+  </form>
+</section>
+<header id="appHeader" class="hidden">
+  <div class="header-left"><span class="logo">P</span><strong>PaperLens</strong><span class="badge" id="userBadge"></span></div>
+  <div class="header-left"><a class="btn btn-sm" href="#/">首页</a><button class="btn btn-sm" id="logoutButton" type="button">退出</button></div>
+</header>
+<main id="appMain" class="hidden">
+  <section id="homeView">
+    <div class="hero">
+      <h2>搜索论文，开始带引用的对话</h2>
+      <p>输入关键词检索公开论文目录，或上传一份 PDF 作为本次查询文本。</p>
+      <form id="searchForm" class="search-row">
+        <input id="searchInput" maxlength="2000" placeholder="例如：transformer 注意力机制" required>
+        <button class="btn btn-primary" type="submit" id="searchButton">搜索</button>
+      </form>
+      <div class="file-row">
+        <label for="pdfInput" class="btn btn-sm" style="margin:0">上传 PDF 查询</label>
+        <input id="pdfInput" type="file" accept="application/pdf" class="hidden">
+        <span id="pdfName">未选择文件</span>
+      </div>
+      <div class="msg error" id="homeMsg"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>最近会话</h3><button class="btn btn-sm" id="refreshSessions" type="button">刷新</button></div>
+      <div class="panel-body"><div id="recentSessions" class="session-list"><div class="empty">还没有会话</div></div></div>
+    </div>
+  </section>
+  <section id="sessionView" class="hidden">
+    <button class="btn btn-sm back-btn" id="backButton" type="button">← 返回首页</button>
+    <div class="session-summary">
+      <h2 id="sessionQuery"></h2>
+      <div class="session-stats">
+        <span id="sessionType"></span><span id="sessionPaperCount"></span>
+        <span id="sessionEvidenceCount"></span><span id="sessionRepoCount"></span>
+      </div>
+      <div class="tabs">
+        <button class="tab active" data-tab="chat" type="button">对话</button>
+        <button class="tab" data-tab="papers" type="button">论文总结</button>
+        <button class="tab" data-tab="repos" type="button">相关仓库</button>
+      </div>
+    </div>
+    <div id="chatTab" class="tab-panel">
+      <div class="panel chat-panel">
+        <div id="messages" class="messages"></div>
+        <div class="chat-hint" id="chatHint"></div>
+        <form id="chatForm" class="chat-input">
+          <textarea id="chatInput" maxlength="2000" placeholder="基于当前证据追问…"></textarea>
+          <button class="btn btn-primary" type="submit" id="sendButton">发送</button>
+          <button class="btn btn-danger hidden" type="button" id="stopButton">停止</button>
+        </form>
+      </div>
+    </div>
+    <div id="papersTab" class="tab-panel hidden">
+      <div class="panel"><div class="panel-head"><h3>本次论文</h3></div><div class="panel-body"><div id="paperList" class="papers"></div></div></div>
+    </div>
+    <div id="reposTab" class="tab-panel hidden">
+      <div class="panel"><div class="placeholder">相关仓库由 D4 接入。</div></div>
+    </div>
+  </section>
+</main>
+<dialog id="citationDialog">
+  <div class="dialog-body">
+    <h3 class="dialog-title" id="citationTitle"></h3>
+    <div class="dialog-meta" id="citationMeta"></div>
+    <div class="dialog-actions"><button class="btn" id="citationClose" type="button">关闭</button></div>
+  </div>
+</dialog>
+<div class="toast" id="toast"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const API = "/api/v1";
+let currentUser = null;
+let currentSession = null;
+let currentConversationId = null;
+let currentController = null;
+let currentCitations = {};
+let currentAnswer = "";
+let currentAnswerNode = null;
+let toastTimer = null;
+
+function toast(message, isError = false) {
+  const node = $("toast");
+  node.textContent = message || "";
+  node.className = "toast show" + (isError ? " error" : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { node.className = "toast"; }, 3200);
+}
+
+async function readError(response) {
+  try {
+    const body = await response.json();
+    return body.error?.message || "请求失败";
+  } catch (_) {
+    return "请求失败";
+  }
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(API + path, {
+    credentials: "same-origin",
+    ...options,
+    headers: options.body instanceof FormData
+      ? options.headers
+      : { "Content-Type": "application/json", ...(options.headers || {}) },
+  });
+  if (response.status === 401) {
+    showLogin("登录已失效，请重新登录");
+    throw new Error("unauthorized");
+  }
+  if (!response.ok) throw new Error(await readError(response));
+  if (response.status === 204) return null;
+  return response.json();
+}
+
+function showLogin(message = "") {
+  currentUser = null;
+  currentSession = null;
+  $("loginView").classList.remove("hidden");
+  $("appHeader").classList.add("hidden");
+  $("appMain").classList.add("hidden");
+  $("loginMsg").textContent = message;
+}
+
+function showApp(user) {
+  currentUser = user;
+  $("loginView").classList.add("hidden");
+  $("appHeader").classList.remove("hidden");
+  $("appMain").classList.remove("hidden");
+  $("userBadge").textContent = user.display_name || user.email;
+  route();
+}
+
+async function login(event) {
+  event.preventDefault();
+  const button = $("loginButton");
+  button.disabled = true;
+  $("loginMsg").textContent = "";
+  try {
+    const data = await api("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: $("email").value.trim(), password: $("password").value }),
+    });
+    $("password").value = "";
+    location.hash = "#/";
+    showApp(data.user);
+  } catch (error) {
+    $("loginMsg").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function logout() {
+  try { await api("/auth/logout", { method: "POST" }); } catch (_) { /* ignore */ }
+  location.hash = "#/";
+  showLogin("");
+}
+
+async function boot() {
+  try {
+    const user = await api("/auth/me");
+    showApp(user);
+  } catch (_) {
+    showLogin("");
+  }
+}
+
+async function loadRecentSessions() {
+  const box = $("recentSessions");
+  try {
+    const data = await api("/sessions?page=1&page_size=5");
+    box.innerHTML = "";
+    if (!data.items.length) {
+      box.innerHTML = '<div class="empty">还没有会话，先搜索论文吧。</div>';
+      return;
+    }
+    for (const item of data.items) {
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "session-item";
+      card.addEventListener("click", () => { location.hash = `#/sessions/${item.id}`; });
+      const left = document.createElement("div");
+      const query = document.createElement("div");
+      query.className = "session-query";
+      query.textContent = item.query;
+      const meta = document.createElement("div");
+      meta.className = "session-meta";
+      meta.textContent = `${item.query_type === "pdf" ? "PDF" : "文字"} · ${item.paper_count} 篇论文 · ${item.evidence_count} 条证据`;
+      left.append(query, meta);
+      const time = document.createElement("div");
+      time.className = "session-meta";
+      time.textContent = formatTime(item.created_at);
+      card.append(left, time);
+      box.append(card);
+    }
+  } catch (error) {
+    box.innerHTML = "";
+    const node = document.createElement("div");
+    node.className = "empty";
+    node.textContent = error.message;
+    box.append(node);
+  }
+}
+
+function formatTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("zh-CN");
+}
+
+async function submitSearch(event) {
+  event.preventDefault();
+  const query = $("searchInput").value.trim();
+  if (!query) return;
+  const button = $("searchButton");
+  button.disabled = true;
+  $("homeMsg").textContent = "";
+  try {
+    const session = await api("/search", { method: "POST", body: JSON.stringify({ query }) });
+    location.hash = `#/sessions/${session.id}`;
+  } catch (error) {
+    $("homeMsg").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function uploadPdf(file) {
+  if (!file) return;
+  const form = new FormData();
+  form.append("file", file);
+  $("homeMsg").textContent = "正在上传并检索…";
+  try {
+    const session = await api("/search/pdf", { method: "POST", body: form });
+    location.hash = `#/sessions/${session.id}`;
+  } catch (error) {
+    $("homeMsg").textContent = error.message;
+  } finally {
+    $("pdfInput").value = "";
+    $("pdfName").textContent = "未选择文件";
+  }
+}
+
+async function loadSession(id) {
+  try {
+    const detail = await api(`/sessions/${id}`);
+    currentSession = detail;
+    currentConversationId = detail.conversation_id;
+    $("homeView").classList.add("hidden");
+    $("sessionView").classList.remove("hidden");
+    $("sessionQuery").textContent = detail.query;
+    $("sessionType").textContent = detail.query_type === "pdf" ? "PDF 查询" : "文字查询";
+    $("sessionPaperCount").textContent = `${detail.paper_count} 篇论文`;
+    $("sessionEvidenceCount").textContent = `${detail.evidence_count} 条证据`;
+    $("sessionRepoCount").textContent = `${detail.related_repo_count} 个相关仓库`;
+    $("chatInput").disabled = !detail.has_evidence;
+    $("sendButton").disabled = !detail.has_evidence;
+    $("chatHint").textContent = detail.has_evidence
+      ? "回答会先完成引用校验，再逐段返回。"
+      : "当前会话没有证据，不能对话。请返回修改查询。";
+    renderPapers(detail.papers || []);
+    await loadMessages(detail);
+    switchTab("chat");
+  } catch (error) {
+    toast(error.message, true);
+    location.hash = "#/";
+  }
+}
+
+function renderPapers(papers) {
+  const box = $("paperList");
+  box.innerHTML = "";
+  if (!papers.length) {
+    box.innerHTML = '<div class="empty">本次没有命中论文。</div>';
+    return;
+  }
+  for (const paper of papers) {
+    const card = document.createElement("div");
+    card.className = "paper-card";
+    const title = document.createElement("div");
+    title.className = "paper-title";
+    title.textContent = paper.title;
+    const meta = document.createElement("div");
+    meta.className = "paper-meta";
+    const authors = (paper.authors || []).join(", ") || "作者未知";
+    meta.textContent = `${authors} · ${paper.year || "年份未知"} · ${paper.venue || "venue 未知"}${paper.is_archived ? " · 已归档" : ""}`;
+    card.append(title, meta);
+    box.append(card);
+  }
+}
+
+function switchTab(name) {
+  document.querySelectorAll(".tab").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.tab === name);
+  });
+  $("chatTab").classList.toggle("hidden", name !== "chat");
+  $("papersTab").classList.toggle("hidden", name !== "papers");
+  $("reposTab").classList.toggle("hidden", name !== "repos");
+}
+
+function addMessage(role, content, citations = [], status = "complete") {
+  const box = $("messages");
+  const bubble = document.createElement("div");
+  bubble.className = `bubble ${role === "assistant" ? "assistant" : role}`;
+  if (status === "error") bubble.classList.add("error");
+  if (role === "assistant") {
+    currentAnswerNode = bubble;
+    renderAnswer(bubble, content, citations);
+  } else {
+    bubble.textContent = content;
+  }
+  box.append(bubble);
+  box.scrollTop = box.scrollHeight;
+  return bubble;
+}
+
+function renderAnswer(bubble, text, citations) {
+  bubble.innerHTML = "";
+  const map = new Map((citations || []).map((item) => [Number(item.index), item]));
+  const pattern = /\[(\d+)\]/g;
+  let last = 0;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > last) bubble.append(document.createTextNode(text.slice(last, match.index)));
+    const index = Number(match[1]);
+    if (map.has(index)) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "citation-btn";
+      button.textContent = `[${index}]`;
+      button.title = "查看引用";
+      button.addEventListener("click", () => showCitation(map.get(index)));
+      bubble.append(button);
+    } else {
+      bubble.append(document.createTextNode(match[0]));
+    }
+    last = match.index + match[0].length;
+  }
+  bubble.append(document.createTextNode(text.slice(last)));
+  bubble.dataset.text = text;
+}
+
+function showCitation(citation) {
+  if (!citation) return;
+  $("citationTitle").textContent = `引用 [${citation.index}]`;
+  $("citationMeta").textContent = "";
+  $("citationDialog").showModal();
+  api(`/papers/${citation.paper_id}`).then((paper) => {
+    const authors = (paper.authors || []).join(", ") || "作者未知";
+    $("citationTitle").textContent = paper.title;
+    $("citationMeta").textContent = [
+      `${authors} · ${paper.year || "年份未知"} · ${paper.venue || "venue 未知"}`,
+      `页码：${citation.page ?? "未知"}`,
+      "",
+      citation.quote || "",
+    ].join("\n");
+  }).catch((error) => { $("citationMeta").textContent = error.message; });
+}
+
+async function loadMessages(detail) {
+  const box = $("messages");
+  box.innerHTML = "";
+  currentCitations = {};
+  const system = document.createElement("div");
+  system.className = "bubble system";
+  system.textContent = detail.system_message;
+  box.append(system);
+  try {
+    const data = await api(`/sessions/${detail.id}/messages?limit=50`);
+    const items = data.items.slice().reverse();
+    for (const message of items) {
+      if (message.role === "system") continue;
+      addMessage(message.role, message.content, message.citations || [], message.status);
+    }
+    if (data.has_more) {
+      const more = document.createElement("div");
+      more.className = "empty";
+      more.textContent = "仅显示最近 50 条消息。";
+      box.append(more);
+    }
+  } catch (error) {
+    toast(error.message, true);
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendChat(event) {
+  event.preventDefault();
+  if (!currentSession || !currentSession.has_evidence || currentController) return;
+  const input = $("chatInput");
+  const question = input.value.trim();
+  if (!question) return;
+  input.value = "";
+  currentAnswer = "";
+  currentCitations = {};
+  addMessage("user", question);
+  const answerBubble = addMessage("assistant", "");
+  currentAnswerNode = answerBubble;
+  setStreaming(true);
+  const controller = new AbortController();
+  currentController = controller;
+  try {
+    const response = await fetch(`${API}/sessions/${currentSession.id}/chat/stream`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: question }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(await readError(response));
+    if (!response.body) throw new Error("浏览器不支持流式响应");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() || "";
+      for (const frame of frames) handleSseFrame(frame);
+    }
+    if (buffer.trim()) handleSseFrame(buffer);
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      toast(error.message, true);
+      answerBubble.classList.add("error");
+      if (!currentAnswer) answerBubble.textContent = error.message;
+    }
+  } finally {
+    if (currentController === controller) {
+      currentController = null;
+      setStreaming(false);
+    }
+  }
+}
+
+function handleSseFrame(frame) {
+  if (!frame.trim() || frame.startsWith(":")) return;
+  let event = "";
+  let data = "";
+  for (const line of frame.split("\n")) {
+    if (line.startsWith("event: ")) event = line.slice(7);
+    else if (line.startsWith("data: ")) data += line.slice(6);
+  }
+  if (!event) return;
+  let payload = {};
+  try { payload = data ? JSON.parse(data) : {}; } catch (_) { return; }
+  if (event === "meta") {
+    currentConversationId = payload.conversation_id;
+  } else if (event === "citation") {
+    currentCitations[payload.index] = payload;
+    if (currentAnswerNode) renderAnswer(currentAnswerNode, currentAnswer, Object.values(currentCitations));
+  } else if (event === "token") {
+    currentAnswer += payload.text || "";
+    if (currentAnswerNode) renderAnswer(currentAnswerNode, currentAnswer, Object.values(currentCitations));
+  } else if (event === "error") {
+    toast(payload.message || "生成失败", true);
+    if (currentAnswerNode) {
+      currentAnswerNode.classList.add("error");
+      if (!currentAnswer) currentAnswerNode.textContent = payload.message || "生成失败";
+    }
+  } else if (event === "done") {
+    toast("回答完成");
+    if (currentSession) loadMessages(currentSession);
+  }
+}
+
+function setStreaming(active) {
+  $("sendButton").classList.toggle("hidden", active);
+  $("stopButton").classList.toggle("hidden", !active);
+  $("chatInput").disabled = active || !currentSession?.has_evidence;
+}
+
+function stopChat() {
+  if (currentController) {
+    currentController.abort();
+    currentController = null;
+    setStreaming(false);
+    toast("已停止生成");
+    if (currentSession) loadMessages(currentSession);
+  }
+}
+
+function route() {
+  if (!currentUser) return;
+  const match = location.hash.match(/^#\/sessions\/(\d+)$/);
+  if (match) loadSession(Number(match[1]));
+  else showHome();
+}
+
+function showHome() {
+  if (currentController) currentController.abort();
+  currentSession = null;
+  $("sessionView").classList.add("hidden");
+  $("homeView").classList.remove("hidden");
+  loadRecentSessions();
+}
+
+function bindEvents() {
+  $("loginForm").addEventListener("submit", login);
+  $("logoutButton").addEventListener("click", logout);
+  $("searchForm").addEventListener("submit", submitSearch);
+  $("refreshSessions").addEventListener("click", loadRecentSessions);
+  $("pdfInput").addEventListener("change", (event) => {
+    const file = event.target.files?.[0];
+    $("pdfName").textContent = file ? file.name : "未选择文件";
+    if (file) uploadPdf(file);
+  });
+  $("chatForm").addEventListener("submit", sendChat);
+  $("stopButton").addEventListener("click", stopChat);
+  $("backButton").addEventListener("click", () => { location.hash = "#/"; });
+  $("citationClose").addEventListener("click", () => $("citationDialog").close());
+  $("citationDialog").addEventListener("click", (event) => {
+    if (event.target === $("citationDialog")) $("citationDialog").close();
+  });
+  document.querySelectorAll(".tab").forEach((tab) => {
+    tab.addEventListener("click", () => switchTab(tab.dataset.tab));
+  });
+  window.addEventListener("hashchange", route);
+}
+
+bindEvents();
+boot();
+</script>
+</body>
+</html>
+
