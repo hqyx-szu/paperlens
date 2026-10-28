@@ -13,12 +13,14 @@ from app.models import (
     Message,
     Paper,
     PaperChunk,
+    PaperFile,
     SearchSession,
     SessionEvidence,
     SessionPaper,
 )
 from app.services.search import SearchResult, create_search_session, search_catalog
 from tests.api.conftest import login
+from tests.pdf_factory import make_pdf_bytes, upload
 
 
 async def _create_paper(
@@ -404,3 +406,109 @@ async def test_search_route_is_registered(app) -> None:
     paths = set(app.openapi()["paths"])
     assert "/api/v1/search" in paths
     assert "/api/v1/sessions/{session_id}" in paths
+
+
+async def test_search_pdf_success(reader_client) -> None:
+    catalog = await _create_paper("Catalog PDF", chunks=[(1, "unique pdf evidence")])
+    content = make_pdf_bytes(title="PDF Paper", body="unique pdf evidence")
+    response = await reader_client.post(
+        "/api/v1/search/pdf",
+        files={"file": upload("paper.pdf", content)},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["query_type"] == "pdf"
+    assert body["query"] == "paper.pdf"
+    assert [item["id"] for item in body["papers"]] == [catalog.id]
+    assert body["paper_count"] == 1
+    assert body["evidence_count"] >= 1
+    assert body["has_evidence"] is True
+
+    async with get_session_factory()() as db:
+        assert await db.scalar(select(func.count()).select_from(Paper)) == 1
+        assert await db.scalar(select(func.count()).select_from(PaperFile)) == 0
+
+
+async def test_search_pdf_empty_filename(reader_client) -> None:
+    content = make_pdf_bytes(title="PDF Paper", body="unique pdf evidence")
+    response = await reader_client.post(
+        "/api/v1/search/pdf",
+        files={"file": upload("   ", content)},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["query"] == "PDF 查询"
+
+
+async def test_search_pdf_no_text(reader_client) -> None:
+    response = await reader_client.post(
+        "/api/v1/search/pdf",
+        files={"file": upload("blank.pdf", make_pdf_bytes(blank=True))},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "pdf_no_text"
+    assert await _count_sessions() == 0
+
+
+async def test_search_pdf_encrypted(reader_client) -> None:
+    response = await reader_client.post(
+        "/api/v1/search/pdf",
+        files={"file": upload("secret.pdf", make_pdf_bytes(encrypted=True))},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "pdf_no_text"
+    assert await _count_sessions() == 0
+
+
+async def test_search_pdf_too_many_pages(reader_client) -> None:
+    response = await reader_client.post(
+        "/api/v1/search/pdf",
+        files={"file": upload("long.pdf", make_pdf_bytes(pages=51))},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "pdf_too_many_pages"
+    assert await _count_sessions() == 0
+
+
+async def test_search_pdf_type_and_size(reader_client, monkeypatch) -> None:
+    response = await reader_client.post(
+        "/api/v1/search/pdf",
+        files={"file": upload("paper.txt", b"not a pdf", "text/plain")},
+    )
+    assert response.status_code == 415
+    assert response.json()["error"]["code"] == "unsupported_media_type"
+
+    monkeypatch.setattr("app.api.v1.endpoints.search.MAX_PDF_BYTES", 1024)
+    response = await reader_client.post(
+        "/api/v1/search/pdf",
+        files={"file": upload("large.pdf", b"%PDF-" + b"x" * 1024)},
+    )
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "file_too_large"
+    assert await _count_sessions() == 0
+
+
+async def test_search_pdf_missing_file(reader_client) -> None:
+    response = await reader_client.post("/api/v1/search/pdf")
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+    assert await _count_sessions() == 0
+
+
+async def test_search_pdf_no_result_still_creates_empty_session(reader_client) -> None:
+    content = make_pdf_bytes(title="No match", body="zzz qqq vvv")
+    response = await reader_client.post(
+        "/api/v1/search/pdf",
+        files={"file": upload("no-match.pdf", content)},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["papers"] == []
+    assert response.json()["system_message"] == (
+        "没有找到足够证据回答这次查询。你可以修改查询，或去公开仓库看看。"
+    )

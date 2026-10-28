@@ -40,7 +40,7 @@ _TRAILING_DOI_PUNCTUATION = ".,;:)]}，。；：）】"
 class PdfParseError(Exception):
     def __init__(
         self,
-        code: Literal["corrupt", "encrypted", "no_text_layer"],
+        code: Literal["corrupt", "encrypted", "no_text_layer", "too_many_pages"],
         user_message: str,
     ) -> None:
         super().__init__(user_message)
@@ -96,11 +96,17 @@ def _metadata_value(metadata: object | None, key: str, attribute: str) -> str | 
     return text or None
 
 
-def _read_pdf(path: Path) -> tuple[list[tuple[int, str]], object | None]:
+def _read_pdf(
+    path: Path,
+    *,
+    max_pages: int | None = None,
+) -> tuple[list[tuple[int, str]], object | None]:
     try:
         reader = PdfReader(str(path))
         if reader.is_encrypted and not reader.decrypt(""):
             raise PdfParseError("encrypted", "PDF 已加密，无法解析")
+        if max_pages is not None and len(reader.pages) > max_pages:
+            raise PdfParseError("too_many_pages", "PDF 页数超过限制")
 
         pages: list[tuple[int, str]] = []
         for page_number, page in enumerate(reader.pages, start=1):
@@ -114,8 +120,12 @@ def _read_pdf(path: Path) -> tuple[list[tuple[int, str]], object | None]:
         raise PdfParseError("corrupt", "文件已损坏，无法解析 PDF") from exc
 
 
-def extract_pdf_pages(path: Path) -> list[tuple[int, str]]:
-    return _read_pdf(path)[0]
+def extract_pdf_pages(
+    path: Path,
+    *,
+    max_pages: int | None = None,
+) -> list[tuple[int, str]]:
+    return _read_pdf(path, max_pages=max_pages)[0]
 
 
 def _first_meaningful_title_line(pages: list[tuple[int, str]]) -> str | None:

@@ -103,3 +103,12 @@ def test_extract_pdf_pages_keeps_page_numbers(tmp_path: Path) -> None:
 
     assert [page for page, _ in pages] == [1, 2]
     assert pages[0][1]
+
+
+def test_extract_pdf_pages_respects_max_pages(tmp_path: Path) -> None:
+    path = _write_pdf(tmp_path, pages=51)
+
+    with pytest.raises(PdfParseError) as exc_info:
+        extract_pdf_pages(path, max_pages=50)
+
+    assert exc_info.value.code == "too_many_pages"
