@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 
@@ -80,17 +80,28 @@ def create_app() -> FastAPI:
 
         # 产品设计 §4.1 的页面地图用路径形式；页面本身是 hash 路由，这里做别名跳转。
         # 只声明显式路由（int 约束），避免 catch-all 抢走 /api、/docs 与静态资源。
+        # 查询串（如 ?page=3&quote=...）要并进 hash 片段，否则引用定位会丢。
+        def _hash_target(path: str, request: Request) -> str:
+            query = f"?{request.url.query}" if request.url.query else ""
+            return f"{path}{query}"
+
         @app.get("/sessions/{session_id:int}", include_in_schema=False)
-        async def session_alias(session_id: int) -> RedirectResponse:
-            return RedirectResponse(f"/app#/sessions/{session_id}", status_code=307)
+        async def session_alias(session_id: int, request: Request) -> RedirectResponse:
+            return RedirectResponse(
+                _hash_target(f"/app#/sessions/{session_id}", request), status_code=307
+            )
 
         @app.get("/repos/{repo_id:int}", include_in_schema=False)
-        async def repo_alias(repo_id: int) -> RedirectResponse:
-            return RedirectResponse(f"/app#/repos/{repo_id}", status_code=307)
+        async def repo_alias(repo_id: int, request: Request) -> RedirectResponse:
+            return RedirectResponse(
+                _hash_target(f"/app#/repos/{repo_id}", request), status_code=307
+            )
 
         @app.get("/papers/{paper_id:int}", include_in_schema=False)
-        async def paper_alias(paper_id: int) -> RedirectResponse:
-            return RedirectResponse(f"/app#/papers/{paper_id}", status_code=307)
+        async def paper_alias(paper_id: int, request: Request) -> RedirectResponse:
+            return RedirectResponse(
+                _hash_target(f"/app#/papers/{paper_id}", request), status_code=307
+            )
 
     if admin_ui.is_file():
 

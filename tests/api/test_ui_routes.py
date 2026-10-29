@@ -29,6 +29,14 @@ async def test_paper_alias_redirects(client: AsyncClient) -> None:
     assert response.headers["location"] == "/app#/papers/123"
 
 
+async def test_paper_alias_keeps_query_string(client: AsyncClient) -> None:
+    """引用定位链接带 ?page=&quote=，重定向必须把查询串并进 hash 片段。"""
+    response = await client.get("/papers/123?page=3&quote=abc")
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/app#/papers/123?page=3&quote=abc"
+
+
 async def test_admin_view_aliases_redirect(client: AsyncClient) -> None:
     for view in ("overview", "papers", "repos", "users"):
         response = await client.get(f"/admin/{view}")
