@@ -15,6 +15,9 @@ _CHUNK_MIN = 50
 _CHUNK_MAX = 2000
 _ABSTRACT_MAX = 20000
 
+# 损坏的 ToUnicode 映射会抽出孤立代理项（\ud800-\udfff），它们无法编码成 UTF-8，
+# 一路保留会让 content_hash 计算与入库直接抛 UnicodeEncodeError。
+_SURROGATE_RE = re.compile(r"[\ud800-\udfff]")
 _HORIZONTAL_WS_RE = re.compile(r"[^\S\n]+")
 _MULTI_BLANK_LINE_RE = re.compile(r"\n{3,}")
 _DOI_RE = re.compile(r"10\.\d{4,9}/[-._;()/:A-Za-z0-9]+")
@@ -68,6 +71,7 @@ class ParsedPaper:
 
 
 def normalize_text(value: str) -> str:
+    value = _SURROGATE_RE.sub("", value)
     value = value.replace("\x00", "")
     value = value.replace("\r\n", "\n").replace("\r", "\n")
     value = _HORIZONTAL_WS_RE.sub(" ", value)

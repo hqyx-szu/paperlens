@@ -21,7 +21,7 @@ uv run ruff format --check .
 uv run alembic check
 ```
 
-- Full suite: 320 tests, about 11 minutes on the current machine.
+- Full suite: 364 tests, about 12 minutes on the current machine.
 - Targeted tests are fine during development; the full suite is required before completion.
 - Do not run two pytest processes at once; they share the `paperlens_test` database.
 - Tests force `EMBEDDING_PROVIDER=none` (see `tests/conftest.py`): no local model, no network.

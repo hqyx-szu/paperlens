@@ -186,7 +186,7 @@ uv run python -m scripts.create_admin --email admin@example.com   # 创建或提
 **跑测试（串行，勿并发）**
 
 ```bash
-uv run pytest -q          # 当前 320 项，本机约 11 分钟
+uv run pytest -q          # 当前 364 项，本机约 12 分钟
 ```
 
 > 全量测试与手工 `alembic upgrade` 都会操作 `paperlens_test`，不要同时跑两个 pytest。
@@ -213,6 +213,48 @@ uv run pytest -q          # 当前 320 项，本机约 11 分钟
 
 **管理员能管什么**：私有仓库可改名/改简介/改可见性/删除/增删论文/查看全部用户对话；
 公开仓库对管理员**只读**（契约权限真值表），列表里显示「只读」而非管理入口。
+
+## 批量采集（arXiv）
+
+`scripts/arxiv_ingest.py` 从 arXiv 批量取论文，走**管理员导入接口**入库（与手工上传同一条流水线：
+SHA-256 去重 → 解析 → 切块 → 向量），再用 arXiv 元数据修正标题/作者/年份/来源/摘要。
+
+```bash
+# 0) 先起服务（脚本通过 HTTP 调用它）
+uv run uvicorn app.main:app --port 8000
+
+# 1) 只看检索结果，不下载、不写库
+uv run python -m scripts.arxiv_ingest --category cs.CL --max-results 5 --dry-run
+
+# 2) 采集最新 20 篇（分类 + 关键词可组合）
+PAPERLENS_ADMIN_EMAIL=admin@example.com PAPERLENS_ADMIN_PASSWORD='...' \
+  uv run python -m scripts.arxiv_ingest --category cs.CL --query "retrieval augmented generation" --max-results 20
+
+# 3) 翻页 / 换排序
+uv run python -m scripts.arxiv_ingest --category cs.IR --max-results 50 --start 50 --sort relevance
+```
+
+| 参数 | 说明 |
+| --- | --- |
+| `--category` | arXiv 分类，`cs.*` 表示整个计算机领域；也可 `cs.CL`、`cs.LG`、`cs.IR`、`cs.CV` |
+| `--query` | 关键词短语（全字段匹配），留空表示只要分类 |
+| `--max-results` / `--start` | 单次取多少篇（1–500，默认 20）/ 偏移，用于翻页 |
+| `--sort` | `submittedDate`（默认，最新）/ `relevance` / `lastUpdatedDate` |
+| `--batch-size` | 每批导入个数（≤20，默认 10，服务端上限） |
+| `--delay` | 每次 arXiv 请求后的等待秒数（默认 3，遵守 arXiv 访问约定） |
+| `--wait` / `--poll-interval` | 导入后等处理完成再修元数据的最长秒数（默认 180）/ 轮询间隔（默认 3） |
+| `--email` / `--password` | 管理员账号，也可用 `PAPERLENS_ADMIN_EMAIL` / `PAPERLENS_ADMIN_PASSWORD` |
+| `--base-url` | PaperLens 地址，默认 `http://127.0.0.1:8000` |
+| `--no-metadata` | 只导入，不修正 arXiv 元数据 |
+| `--dry-run` | 只列命中结果 |
+
+要点：
+- 文件名用 arXiv ID（去版本号），**重复执行不会产生副本**，第二次会显示“已存在”。
+- 元数据修正需要论文离开“处理中”状态（契约：处理中 PATCH 返回 409），脚本会自动轮询到 `ready`；
+  `failed`（扫描件/无文本层）会跳过修正。
+- 预印本没有 `journal_ref` 时，来源记为 `arXiv <主分类>`（例如 `arXiv cs.CL`），避免 PDF 里的
+  `arXiv:2610.37651v1 [cs.CL] 27 Oct 2026` 噪声。
+- 只依赖标准库，不新增运行时依赖；`uv sync --no-dev` 也能跑。
 
 ## 主要接口
 
@@ -357,7 +399,7 @@ MySQL 注意：`downgrade()` 只按反序 `drop_table`，不要写 `drop_index`�
 ## 测试
 
 ```bash
-uv run pytest -q                 # 当前 320 项，本机约 11 分钟，串行
+uv run pytest -q                 # 当前 364 项，本机约 12 分钟，串行
 uv run ruff check .
 uv run ruff format --check .
 uv run alembic check              # 模型与迁移一致

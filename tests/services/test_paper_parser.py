@@ -5,7 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from app.services.paper_parser import PdfParseError, extract_pdf_pages, parse_pdf
+from app.services.paper_parser import (
+    PdfParseError,
+    extract_pdf_pages,
+    normalize_text,
+    parse_pdf,
+)
 from tests.pdf_factory import make_pdf_bytes
 
 
@@ -112,3 +117,8 @@ def test_extract_pdf_pages_respects_max_pages(tmp_path: Path) -> None:
         extract_pdf_pages(path, max_pages=50)
 
     assert exc_info.value.code == "too_many_pages"
+
+
+def test_normalize_text_drops_lone_surrogates() -> None:
+    assert normalize_text("attention \ud83d models") == "attention models"
+    assert normalize_text("\ud800\udc00ok\udfff").encode("utf-8") == b"ok"
