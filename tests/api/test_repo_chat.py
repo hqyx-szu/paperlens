@@ -13,7 +13,7 @@ from app.core.exceptions import AppError
 from app.core.papers import PaperStatus
 from app.db import get_session_factory
 from app.models import Conversation, Message, Paper, PaperChunk
-from app.services.repo_chat import repo_chat_events
+from app.services.repo_chat import REPO_CAPABILITY_TEXT, repo_chat_events
 from tests.api.conftest import login
 from tests.fakes import FakeLLMClient, final_response, response_with_tool_call
 
@@ -202,6 +202,111 @@ async def test_repo_chat_sse_order_and_citation(make_client, reader_user, monkey
     assert [row.role for row in rows] == [MessageRole.user.value, MessageRole.assistant.value]
     assert rows[-1].status == MessageStatus.complete.value
     assert rows[-1].citations[0]["paper_id"] == paper.id
+
+
+async def test_repo_chat_reuses_agent_final_answer(make_client, reader_user, monkeypatch) -> None:
+    """Agent 工具阶段已给出带有效引用的答案时，直接复用，不再二次生成。"""
+    client, repo, paper = await _repo_setup(make_client, reader_user, visibility="public")
+    agent_answer = "当前仓库里有一篇论文《Repo paper》，见 [1]。"
+    fake = _patch_llm(
+        monkeypatch,
+        FakeLLMClient(
+            responses=[_tool_call("transformer"), final_response(agent_answer)],
+            stream_parts=["根据当前资料，没有足够证据回答这个问题。"],
+        ),
+    )
+
+    response = await client.post(
+        f"{REPOS}/{repo['id']}/chat/stream", json={"message": "这个仓库包含了哪些论文"}
+    )
+
+    assert response.status_code == 200
+    events = _parse_sse(response.text)
+    tokens = "".join(data["text"] for name, data in events if name == "token")
+    assert tokens == agent_answer
+    assert "没有足够证据" not in tokens
+    assert fake.stream_calls == []  # 没有第二次生成
+    citations = [data for name, data in events if name == "citation"]
+    assert [item["paper_id"] for item in citations] == [paper.id]
+
+    rows = await _rows(events[0][1]["conversation_id"])
+    assert rows[-1].content == agent_answer
+    assert rows[-1].citations[0]["paper_id"] == paper.id
+
+
+async def test_repo_chat_capability_question_answers_without_citations(
+    make_client, reader_user, monkeypatch
+) -> None:
+    """能力类问题走固定回答：不调模型、不产生引用，也不会被拒答规则改写。"""
+    client, repo, _ = await _repo_setup(make_client, reader_user, visibility="public")
+    fake = _patch_llm(monkeypatch, FakeLLMClient())
+
+    response = await client.post(
+        f"{REPOS}/{repo['id']}/chat/stream", json={"message": "你能回答什么"}
+    )
+
+    assert response.status_code == 200
+    events = _parse_sse(response.text)
+    names = [name for name, _ in events]
+    assert names[0] == "meta"
+    assert names[-1] == "done"
+    assert "citation" not in names
+    tokens = "".join(data["text"] for name, data in events if name == "token")
+    assert tokens == REPO_CAPABILITY_TEXT  # 固定文案，不是模型生成的拒答
+    assert fake.calls == []  # 没进工具循环
+    assert fake.stream_calls == []
+
+    rows = await _rows(events[0][1]["conversation_id"])
+    assert rows[-1].status == MessageStatus.complete.value
+    assert rows[-1].citations == []
+
+
+async def test_repo_chat_invalid_agent_citation_falls_back(
+    make_client, reader_user, monkeypatch
+) -> None:
+    """Agent 答案引用不存在的编号 → 回退到原有流式路径，不泄露无效引用。"""
+    client, repo, paper = await _repo_setup(make_client, reader_user, visibility="public")
+    fake = _patch_llm(
+        monkeypatch,
+        FakeLLMClient(
+            responses=[_tool_call("transformer"), final_response("结论见 [99]。")],
+            stream_parts=["结论见 [1]。"],
+        ),
+    )
+
+    response = await client.post(
+        f"{REPOS}/{repo['id']}/chat/stream", json={"message": "方法是什么"}
+    )
+
+    events = _parse_sse(response.text)
+    tokens = "".join(data["text"] for name, data in events if name == "token")
+    assert tokens == "结论见 [1]。"
+    assert "[99]" not in tokens
+    assert len(fake.stream_calls) == 1  # 走了回退路径
+    assert [data["paper_id"] for name, data in events if name == "citation"] == [paper.id]
+
+
+async def test_repo_chat_refusal_answer_drops_dangling_citation_markers(
+    make_client, reader_user, monkeypatch
+) -> None:
+    """Agent 直接拒答时复用该文案，但正文里残留的 [n] 要清掉（没有 citation 事件）。"""
+    client, repo, _ = await _repo_setup(make_client, reader_user, visibility="public")
+    answer = f"{REFUSAL_TEXT}\n\n检索只找到联邦学习相关片段 [1]，与问题无关。"
+    _patch_llm(
+        monkeypatch,
+        FakeLLMClient(responses=[_tool_call("transformer"), final_response(answer)]),
+    )
+
+    response = await client.post(
+        f"{REPOS}/{repo['id']}/chat/stream", json={"message": "仓库里有量子计算论文吗"}
+    )
+
+    events = _parse_sse(response.text)
+    tokens = "".join(data["text"] for name, data in events if name == "token")
+    assert tokens.startswith(REFUSAL_TEXT)
+    assert "[1]" not in tokens
+    assert [name for name, _ in events if name == "citation"] == []
+    assert events[-1][1]["status"] == "complete"
 
 
 async def test_repo_chat_does_not_use_papers_outside_repo(

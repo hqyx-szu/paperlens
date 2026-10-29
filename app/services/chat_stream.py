@@ -64,6 +64,32 @@ def meta_event(
     )
 
 
+async def stream_answer_events(
+    *,
+    answer: str,
+    citations: list[Any],
+    conversation_id: int,
+) -> AsyncIterator[str]:
+    """已校验答案的收尾：落库 → citation → token → done（不再调用模型）。"""
+    try:
+        assistant_id = await save_assistant_message(
+            conversation_id=conversation_id,
+            content=answer,
+            status=MessageStatus.complete,
+            citations=citations,
+        )
+    except Exception:
+        logger.exception("failed to persist assistant reply")
+        yield sse("error", {"code": "llm_failed", "message": "AI 生成失败，请稍后重试"})
+        return
+
+    for citation in citations:
+        yield sse("citation", citation.model_dump())
+    for chunk in token_chunks(answer):
+        yield sse("token", {"text": chunk})
+    yield sse("done", {"assistant_message_id": assistant_id, "status": "complete"})
+
+
 async def answer_events(
     *,
     client: Any,
@@ -150,23 +176,10 @@ async def answer_events(
         if not citations:
             answer = REFUSAL_TEXT
 
-    try:
-        assistant_id = await save_assistant_message(
-            conversation_id=conversation_id,
-            content=answer,
-            status=MessageStatus.complete,
-            citations=citations,
-        )
-    except Exception:
-        logger.exception("failed to persist assistant reply")
-        yield sse("error", {"code": "llm_failed", "message": "AI 生成失败，请稍后重试"})
-        return
-
-    for citation in citations:
-        yield sse("citation", citation.model_dump())
-    for chunk in token_chunks(answer):
-        yield sse("token", {"text": chunk})
-    yield sse("done", {"assistant_message_id": assistant_id, "status": "complete"})
+    async for event in stream_answer_events(
+        answer=answer, citations=citations, conversation_id=conversation_id
+    ):
+        yield event
 
 
 async def chat_events(

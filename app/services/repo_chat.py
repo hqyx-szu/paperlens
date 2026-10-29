@@ -9,15 +9,20 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.mysql import match
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.ai import CITATION_RE, sse
+from app.core.ai import CITATION_RE, REFUSAL_TEXT, sse
 from app.core.ai.tools import ToolRegistry, ToolSpec, run_tool_loop
 from app.core.chat import ChatScope, MessageStatus
 from app.core.config import get_settings
 from app.core.exceptions import AppError
 from app.db import get_session_factory
 from app.models import Message, Paper, PaperChunk, RepoPaper
-from app.services.chat import ChatEvidence, build_chat_messages
-from app.services.chat_stream import answer_events, meta_event, persist_quietly
+from app.services.chat import ChatEvidence, build_chat_messages, validate_answer_citations
+from app.services.chat_stream import (
+    answer_events,
+    meta_event,
+    persist_quietly,
+    stream_answer_events,
+)
 from app.services.embeddings import embed_query_text, load_chunk_pairs, vector_hits
 
 logger = logging.getLogger("paperlens.repo_chat")
@@ -37,6 +42,51 @@ REPO_AGENT_PROMPT = """你是 PaperLens 的仓库助手，只能用 search_repo 
 FINAL_ANSWER_SUFFIX = (
     "现在基于以上证据给出最终回答；每个事实性结论后用 [编号] 标注来源，没有证据就输出固定拒答文案。"
 )
+
+# 能力类问题（“你能回答什么/你是谁”）不是论文事实陈述，按契约 §11.1.1.6 不需要引用，
+# 直接给固定说明，避免被“无引用 → 拒答”规则改写，也避免模型编造仓库内容。
+REPO_CAPABILITY_TEXT = (
+    "我可以在当前仓库内检索、比较和汇总论文内容：\n"
+    "1. 就某个主题基于原文片段回答，并用 [编号] 标注出处；\n"
+    "2. 比较仓库内多篇论文的做法与结论；\n"
+    "3. 找不到依据时，明确说明“没有足够证据”。\n"
+    "限制：只读、只在当前仓库内检索，不联网、不跨仓库，也不修改任何数据。"
+)
+CAPABILITY_PATTERNS = (
+    "你能回答什么",
+    "你能做什么",
+    "你能干什么",
+    "你可以做什么",
+    "你能帮我做什么",
+    "你能提供什么",
+    "你支持什么",
+    "你是谁",
+    "怎么用你",
+    "如何使用你",
+    "怎么使用你",
+    "what can you do",
+    "what can you answer",
+    "who are you",
+    "how do i use you",
+    "how to use you",
+)
+
+
+def is_capability_question(question: str) -> bool:
+    """短问题 + 明确措辞才算能力问题，避免误伤论文内容提问。"""
+    text = " ".join(question.strip().lower().split())
+    if not text or len(text) > 60:
+        return False
+    return any(pattern in text for pattern in CAPABILITY_PATTERNS)
+
+
+def last_assistant_content(messages: list[dict[str, Any]]) -> str:
+    for message in reversed(messages):
+        if message.get("role") == "assistant":
+            content = str(message.get("content") or "").strip()
+            if content:
+                return content
+    return ""
 
 
 def _escape_like(value: str) -> str:
@@ -269,12 +319,23 @@ async def repo_chat_events(
     )
 
     evidence: list[ChatEvidence] = []
+
+    # 能力类问题：固定回答，不进模型、不产生引用（契约 §11.1.1.6）。
+    if is_capability_question(question):
+        async for event in stream_answer_events(
+            answer=REPO_CAPABILITY_TEXT,
+            citations=[],
+            conversation_id=conversation_id,
+        ):
+            yield event
+        return
+
     registry = build_repo_tool_registry(repo_id=repo_id, evidence=evidence)
     messages = build_repo_agent_messages(history=history, question=question)
     max_steps = min(get_settings().llm_max_tool_steps, MAX_AGENT_STEPS)
 
     try:
-        await run_tool_loop(client, messages, registry, max_steps=max_steps)
+        messages = await run_tool_loop(client, messages, registry, max_steps=max_steps)
     except asyncio.CancelledError:
         await persist_quietly(
             conversation_id=conversation_id,
@@ -309,6 +370,24 @@ async def repo_chat_events(
         yield sse("error", {"code": "llm_failed", "message": "AI 生成失败，请稍后重试"})
         return
 
+    # 复用 Agent 已经给出的最终答案：它见过完整工具结果，通常比“只给片段再答一次”更准。
+    agent_answer = last_assistant_content(messages)
+    if agent_answer:
+        answer, citations = validate_answer_citations(agent_answer, evidence)
+        if answer.strip() and (citations or REFUSAL_TEXT in answer):
+            if REFUSAL_TEXT in answer:
+                # 拒答句是固定文案、不参与引用校验；去掉正文里残留的 [n]，避免前端出现悬空角标。
+                answer = CITATION_RE.sub("", answer).strip()
+                citations = []
+            async for event in stream_answer_events(
+                answer=answer,
+                citations=citations,
+                conversation_id=conversation_id,
+            ):
+                yield event
+            return
+
+    # 回退：Agent 没给出可用答案（空/无有效引用），沿用原有二次生成 + 引用校验/拒答路径。
     final_question = f"{question}\n\n{FINAL_ANSWER_SUFFIX}"
     final_messages = build_chat_messages(
         scope=ChatScope.repo,
