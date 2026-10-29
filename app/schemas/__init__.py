@@ -15,6 +15,7 @@ from app.schemas.chat import (
     SessionPage,
     SessionSummary,
 )
+from app.schemas.common import UserBrief
 from app.schemas.paper import (
     AdminPaperDetail,
     AdminPaperListItem,
@@ -27,6 +28,14 @@ from app.schemas.paper import (
     PaperFileRead,
     PaperPage,
     SummaryLevel,
+)
+from app.schemas.repo import (
+    RepoCreate,
+    RepoDetail,
+    RepoPage,
+    RepoPermissions,
+    RepoSummary,
+    RepoUpdate,
 )
 
 __all__ = [
@@ -50,10 +59,17 @@ __all__ = [
     "PaperFileRead",
     "PaperPage",
     "PasswordReset",
+    "RepoCreate",
+    "RepoDetail",
+    "RepoPage",
+    "RepoPermissions",
+    "RepoSummary",
+    "RepoUpdate",
     "SearchRequest",
     "SessionDetail",
     "SessionPage",
     "SessionSummary",
     "SummaryLevel",
+    "UserBrief",
     "UserRead",
 ]

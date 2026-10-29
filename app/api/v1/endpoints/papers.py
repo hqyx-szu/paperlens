@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user
-from app.api.v1.endpoints.sessions import _chat_events
 from app.core.ai import get_llm_client, sse_response, with_heartbeat
 from app.core.chat import ChatScope, MessageRole, MessageStatus
 from app.core.config import get_settings
@@ -21,14 +20,21 @@ from app.db import get_db
 from app.models import Conversation, Message, Paper, PaperChunk, User
 from app.schemas import MessagePage, PaperBrief, PaperDetail, PaperPage
 from app.schemas.chat import ChatRequest
+from app.schemas.paper import SummaryGenerateRequest, SummaryLevel, SummaryRead
 from app.services.chat import (
     build_chat_messages,
     get_or_create_conversation,
     load_paper_evidence,
 )
+from app.services.chat_stream import chat_events
 from app.services.paper_queries import visible_paper_conditions
 from app.services.paper_storage import PaperStorage
 from app.services.session_service import list_messages
+from app.services.summaries import (
+    available_levels,
+    generate_summary,
+    get_cached_summary,
+)
 
 router = APIRouter(
     prefix="/papers",
@@ -106,7 +112,7 @@ async def get_paper(
         has_file=has_file,
         can_download=can_download,
         can_chat=can_chat,
-        available_summary_levels=[],
+        available_summary_levels=await available_levels(db, paper),
         created_at=paper.created_at,
     )
 
@@ -156,6 +162,32 @@ async def _ready_paper(db: AsyncSession, paper_id: int) -> Paper:
     if paper is None:
         raise AppError(404, "paper_not_found", "论文不存在")
     return paper
+
+
+@router.get("/{paper_id}/summaries", response_model=SummaryRead)
+async def get_paper_summary(
+    paper_id: Annotated[int, Path(ge=1)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    level: Annotated[SummaryLevel, Query()] = SummaryLevel.standard,
+) -> SummaryRead:
+    paper = await _ready_paper(db, paper_id)
+    cached = await get_cached_summary(db, paper, level)
+    if cached is None:
+        raise AppError(404, "summary_not_generated", "该论文还没有生成此详略的四维总结")
+    return cached
+
+
+@router.post("/{paper_id}/summaries/generate", response_model=SummaryRead)
+async def generate_paper_summary(
+    paper_id: Annotated[int, Path(ge=1)],
+    payload: SummaryGenerateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SummaryRead:
+    paper = await _ready_paper(db, paper_id)
+    client = get_llm_client()
+    return await generate_summary(
+        db, paper=paper, level=payload.level, client=client, force=payload.force
+    )
 
 
 @router.post("/{paper_id}/chat/stream")
@@ -217,7 +249,7 @@ async def paper_chat(
     await db.commit()
     await db.refresh(user_message)
 
-    events = _chat_events(
+    events = chat_events(
         client=client,
         messages=messages,
         retry_messages=retry_messages,

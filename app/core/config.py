@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -45,11 +45,25 @@ class Settings(BaseSettings):
     llm_max_tool_steps: int = Field(default=4, ge=1, le=10)
     llm_max_output_tokens: int = Field(default=2048, ge=1)
 
+    embedding_provider: Literal["none", "local"] = "none"
+    embedding_model: str = "BAAI/bge-small-zh-v1.5"
+    embedding_model_path: Path | None = None
+    embedding_query_prefix: str = "为这个句子生成表示以用于检索相关文章："
+    embedding_batch_size: int = Field(default=16, ge=1, le=128)
+    vector_top_k: int = Field(default=40, ge=1, le=500)
+
     @model_validator(mode="after")
     def _require_secure_cookie_in_production(self) -> Settings:
         if self.app_env == "production" and not self.cookie_secure:
             raise ValueError("生产环境必须设置 COOKIE_SECURE=true")
         return self
+
+    @field_validator("embedding_model_path", mode="before")
+    @classmethod
+    def _blank_path_to_none(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     @property
     def is_production(self) -> bool:
@@ -58,6 +72,10 @@ class Settings(BaseSettings):
     @property
     def ai_configured(self) -> bool:
         return bool(self.deepseek_api_key and self.deepseek_api_key.strip())
+
+    @property
+    def embeddings_enabled(self) -> bool:
+        return self.embedding_provider != "none"
 
     def resolved_database_url(self) -> str:
         url = self.test_database_url if self.app_env == "test" else self.database_url

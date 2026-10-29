@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from sqlalchemy import literal, or_, select
@@ -14,6 +15,7 @@ from app.core.chat import (
     MessageStatus,
     QueryType,
 )
+from app.core.config import get_settings
 from app.models import (
     Conversation,
     Message,
@@ -23,11 +25,15 @@ from app.models import (
     SessionEvidence,
     SessionPaper,
 )
+from app.services.embeddings import embed_query_text, load_chunk_pairs, vector_hits
 from app.services.paper_queries import visible_paper_conditions
+
+logger = logging.getLogger("paperlens.search")
 
 PAPER_LIMIT = 8
 EVIDENCE_LIMIT = 20
 QUOTE_MAX = 500
+RRF_K = 60
 _CANDIDATE_LIMIT = EVIDENCE_LIMIT * 3
 
 
@@ -144,12 +150,69 @@ async def _search_metadata(db: AsyncSession, keyword: str) -> list[Paper]:
     return list((await db.scalars(stmt.limit(PAPER_LIMIT))).all())
 
 
+async def _vector_evidence(db: AsyncSession, keyword: str) -> list[EvidenceHit]:
+    """向量召回（全局目录范围）；未启用向量或失败时返回空，检索退化为关键词。"""
+    settings = get_settings()
+    query_vector = await embed_query_text(keyword)
+    if query_vector is None:
+        return []
+
+    try:
+        hits = await vector_hits(
+            db,
+            query_vector=query_vector,
+            limit=settings.vector_top_k,
+            mode="global",
+        )
+    except Exception:
+        logger.exception("vector search failed")
+        return []
+    if not hits:
+        return []
+
+    pairs = await load_chunk_pairs(db, [chunk_id for chunk_id, _ in hits])
+    evidence: list[EvidenceHit] = []
+    for chunk_id, score in hits:
+        pair = pairs.get(chunk_id)
+        if pair is None:
+            continue
+        chunk, paper = pair
+        evidence.append(_hit_from_chunk(chunk, paper, keyword, score=score, center=True))
+    return evidence
+
+
+def _fuse_hits(
+    keyword_hits: list[EvidenceHit],
+    vector_evidence: list[EvidenceHit],
+) -> list[EvidenceHit]:
+    """RRF 融合：两路排名取 1/(k+rank) 相加，向量只影响排序不改预算。"""
+    if not vector_evidence:
+        return keyword_hits
+    if not keyword_hits:
+        return vector_evidence
+
+    scores: dict[int, float] = {}
+    by_chunk: dict[int, EvidenceHit] = {}
+    for rank, hit in enumerate(keyword_hits, start=1):
+        scores[hit.chunk_id] = scores.get(hit.chunk_id, 0.0) + 1.0 / (RRF_K + rank)
+        by_chunk.setdefault(hit.chunk_id, hit)
+    for rank, hit in enumerate(vector_evidence, start=1):
+        scores[hit.chunk_id] = scores.get(hit.chunk_id, 0.0) + 1.0 / (RRF_K + rank)
+        by_chunk.setdefault(hit.chunk_id, hit)
+    return sorted(
+        by_chunk.values(),
+        key=lambda hit: (-scores[hit.chunk_id], hit.paper_id, hit.chunk_id),
+    )
+
+
 async def search_catalog(db: AsyncSession, query: str) -> SearchResult:
     keyword = query.strip()
     if not keyword:
         return SearchResult(papers=[], evidence=[])
 
-    hits = await _search_chunks(db, keyword)
+    keyword_hits = await _search_chunks(db, keyword)
+    vector_evidence = await _vector_evidence(db, keyword)
+    hits = _fuse_hits(keyword_hits, vector_evidence)
     if hits:
         papers: list[Paper] = []
         paper_ids: set[int] = set()

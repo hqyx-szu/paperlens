@@ -18,6 +18,8 @@ dependencies = [
     "openai>=3.37.0",
     "pypdf>=6.21.2",
     "python-multipart>=0.0.32",
+    "sentence-transformers>=6.2.0",
+    "numpy>=2.5.4",
 ]
 
 [dependency-groups]
@@ -31,6 +33,14 @@ dev = [
 
 [tool.uv]
 package = false
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

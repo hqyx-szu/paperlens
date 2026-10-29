@@ -6,6 +6,69 @@ from app.db import get_session_factory
 from app.models import Conversation, Message, Paper
 
 
+async def test_repo_tables_constraints_and_defaults_exist() -> None:
+    async with get_session_factory()() as db:
+        tables = (
+            (
+                await db.execute(
+                    text(
+                        """
+                        SELECT table_name
+                        FROM information_schema.tables
+                        WHERE table_schema = DATABASE()
+                          AND table_name IN ('repos', 'repo_papers', 'repo_stars')
+                        """
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert set(tables) == {"repos", "repo_papers", "repo_stars"}
+
+        unique_indexes = (
+            await db.execute(
+                text(
+                    """
+                    SELECT table_name, index_name
+                    FROM information_schema.statistics
+                    WHERE table_schema = DATABASE()
+                      AND non_unique = 0
+                      AND index_name IN (
+                        'uq_repos_owner_name',
+                        'uq_repo_papers_repo_paper',
+                        'uq_repo_stars_repo_user'
+                      )
+                    """
+                )
+            )
+        ).all()
+        assert {(row[0], row[1]) for row in unique_indexes} == {
+            ("repos", "uq_repos_owner_name"),
+            ("repo_papers", "uq_repo_papers_repo_paper"),
+            ("repo_stars", "uq_repo_stars_repo_user"),
+        }
+
+        repo_columns = (
+            await db.execute(
+                text(
+                    """
+                    SELECT column_name, is_nullable, column_default
+                    FROM information_schema.columns
+                    WHERE table_schema = DATABASE()
+                      AND table_name = 'repos'
+                      AND column_name IN ('visibility', 'description')
+                    """
+                )
+            )
+        ).all()
+        columns = {row[0]: row[1:] for row in repo_columns}
+
+    assert columns["visibility"][0] == "NO"
+    assert columns["visibility"][1] == "private"
+    assert columns["description"][1] == ""
+
+
 async def test_paper_tables_and_fulltext_indexes_exist() -> None:
     async with get_session_factory()() as db:
         tables = (

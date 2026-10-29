@@ -9,6 +9,7 @@ from app.core.exceptions import AppError
 from app.models import Conversation, Message, Paper, SearchSession, SessionPaper
 from app.schemas.chat import MessagePage, MessageRead, SessionDetail, SessionPage, SessionSummary
 from app.schemas.paper import PaperBrief
+from app.services.repo_related import count_related_repos
 
 
 async def get_owned_session(
@@ -51,13 +52,18 @@ async def get_session_detail(
         )
     ).all()
     papers = [PaperBrief.model_validate(paper) for paper, _ in rows]
+    related_repo_count = await count_related_repos(
+        db,
+        session=session,
+        user_id=session.user_id,
+    )
     return SessionDetail(
         id=session.id,
         query=session.query,
         query_type=QueryType(session.query_type),
         paper_count=session.paper_count,
         evidence_count=session.evidence_count,
-        related_repo_count=0,
+        related_repo_count=related_repo_count,
         has_evidence=session.evidence_count > 0,
         system_message=session.system_message,
         conversation_id=conversation_id,

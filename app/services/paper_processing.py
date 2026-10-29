@@ -13,6 +13,7 @@ from app.core.papers import INTERRUPTED_MESSAGE, PaperStatus
 from app.core.time import utcnow
 from app.db import get_session_factory
 from app.models import Paper, PaperChunk
+from app.services.embeddings import embed_paper_chunks
 from app.services.paper_parser import PdfParseError, parse_pdf
 from app.services.paper_storage import PaperStorage
 
@@ -159,6 +160,11 @@ async def process_paper(paper_id: int) -> None:
             await db.rollback()
             logger.exception("paper processing failed", extra={"paper_id": paper_id})
             await _mark_failed(paper_id, _FAILED_MESSAGE)
+            return
+
+    # 向量索引在片段落库后进行；失败不阻塞论文就绪（可用回填脚本补齐）。
+    if get_settings().embeddings_enabled and not await embed_paper_chunks(paper_id):
+        logger.warning("paper chunks left without embeddings", extra={"paper_id": paper_id})
 
 
 async def recover_stale_papers() -> int:

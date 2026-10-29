@@ -14,7 +14,7 @@ from app.core.roles import UserRole
 from app.core.security import hash_password
 from app.core.time import utcnow
 from app.db import get_db
-from app.models import Paper, User, UserSession
+from app.models import Paper, Repo, User, UserSession
 from app.schemas import (
     AdminStats,
     AdminUserCreate,
@@ -210,7 +210,11 @@ async def admin_stats(
         )
     ) or 0
 
-    # 仓库（D4）尚未落地，先保持 0。
+    repos_total = await db.scalar(select(func.count()).select_from(Repo)) or 0
+    repos_private = (
+        await db.scalar(select(func.count()).select_from(Repo).where(Repo.visibility == "private"))
+    ) or 0
+
     return AdminStats(
         users_total=users_total,
         users_active=users_active,
@@ -219,7 +223,7 @@ async def admin_stats(
         papers_processing=papers_processing,
         papers_failed=papers_failed,
         papers_archived=papers_archived,
-        repos_total=0,
-        repos_private=0,
+        repos_total=repos_total,
+        repos_private=repos_private,
         generated_at=utcnow(),
     )

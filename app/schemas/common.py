@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated
 
-from pydantic import PlainSerializer
+from pydantic import BaseModel, PlainSerializer
 
 
 def format_utc(value: datetime) -> str:
@@ -14,3 +14,10 @@ def format_utc(value: datetime) -> str:
 
 
 UTCDatetime = Annotated[datetime, PlainSerializer(format_utc, return_type=str)]
+
+
+class UserBrief(BaseModel):
+    """公开/半公开场景的用户信息，不含邮箱（契约 §2.2）。"""
+
+    id: int
+    display_name: str | None

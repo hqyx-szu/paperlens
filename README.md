@@ -8,9 +8,14 @@
 - 已完成（D1）：`reader` / `admin` 角色、管理员建号/改角色/停用/重置密码、管理总览、管理后台页面（`/admin`）、AI 公共层（DeepSeek 客户端、SSE、工具循环、引用校验）。
 - 已完成（D2）：管理员批量导入 PDF、SHA-256 去重、文本层解析/分页分块、失败重试与归档、就绪论文目录/详情/下载。
 - 已完成（D3）：文字/PDF 全局搜索、会话与证据快照、最近会话/详情/消息游标分页、会话与单篇论文 SSE 对话、引用校验、零构建用户端 `/app`。
+- 已完成（D4）：仓库 CRUD、仓库论文增删、Star、相关仓库推荐、仓库只读 Agent（SSE）、仓库对话可见性、后台仓库列表、`admin/stats` 与 `related_repo_count` 接回。
+- 已完成（D5 后端）：论文四维总结（三档缓存）、`available_summary_levels` 接回。
+- 已完成（向量 RAG）：本地 `bge-small-zh-v1.5` 片段向量 + 关键词 RRF 混合检索（`EMBEDDING_PROVIDER=local`）。
 - 账号由管理员创建，不开放自注册；第一个管理员用 CLI 脚本创建。
 - 数据库 schema 由 Alembic 管理（`alembic.ini` + `migrations/`），应用启动不会自动建表。
-- 下一步：D4 仓库、Star 与相关仓库。
+- 契约 46 个接口全部实现；DeepSeek Key 已配置并完成真实对话/四维联调；两个零构建页面已补全
+  （后台总览/侧栏导航/仓库管理、用户端主页与仓库/论文详情、引用定位、9 条文档路由的 307 深链），
+  见「页面地图」；正式 React 前端（可选）未做。
 
 ## 本地运行
 
@@ -115,6 +120,100 @@ uv run uvicorn app.main:app --reload
 
 不要用「Run Python File」运行 `app/main.py`：它只创建应用对象，不会启动服务器。
 
+## 常用操作速查
+
+**导入论文（管理员）**：三种等价方式，选一种。
+
+```bash
+# 1) 浏览器：/admin → “论文目录” → 导入 PDF（1–20 个，单个 ≤20 MB，总量 ≤100 MB）
+# 2) 命令行（需要已登录的 Cookie）
+curl -b 'paperlens_session=<cookie>' -X POST http://127.0.0.1:8000/api/v1/admin/papers/import \
+  -F 'files=@paper1.pdf' -F 'files=@paper2.pdf'
+# 3) 看处理进度
+curl -b 'paperlens_session=<cookie>' 'http://127.0.0.1:8000/api/v1/admin/papers?status=ready'
+```
+
+导入后自动：`queued → parsing → indexing → ready`，解析完成即写入片段与**向量**（`EMBEDDING_PROVIDER=local`）；
+同一 SHA-256 只保留一份；扫描件/无文本层会失败并可重试；失败可在后台“重试”。
+
+**向量索引（本地模型）**
+
+```bash
+# 首次：下载模型（HF 官方站不可达时用镜像）
+HF_ENDPOINT=https://hf-mirror.com HF_HUB_DISABLE_XET=1 uv run python -c \
+  "from huggingface_hub import snapshot_download as d; d('BAAI/bge-small-zh-v1.5', local_dir='var/models/bge-small-zh-v1.5')"
+
+# .env
+EMBEDDING_PROVIDER=local
+EMBEDDING_MODEL_PATH=/绝对路径/var/models/bge-small-zh-v1.5
+
+# 为历史论文补向量（--limit 0 表示全部）
+uv run python -m scripts.embed_chunks
+
+# 语义排序冒烟（不写库、不调用 LLM）
+uv run python -m scripts.rag_smoke
+uv run python -m scripts.rag_smoke --query "有没有不用循环网络的翻译模型？"
+```
+
+关掉向量：`EMBEDDING_PROVIDER=none`，检索退回纯关键词（行为与 D3 一致，测试也跑在 none 上）。
+
+**四维总结**
+
+```bash
+# 读取（未生成 → 404 summary_not_generated）
+curl -b 'paperlens_session=<cookie>' 'http://127.0.0.1:8000/api/v1/papers/1/summaries?level=standard'
+# 生成（同步，命中缓存直接返回；需要 DEEPSEEK_API_KEY）
+curl -b 'paperlens_session=<cookie>' -X POST http://127.0.0.1:8000/api/v1/papers/1/summaries/generate \
+  -H 'Content-Type: application/json' -d '{"level":"deep"}'
+```
+
+缓存键 `paper_id + level + content_hash + prompt_version + model`；改提示词必须升 `SUMMARY_PROMPT_VERSION`
+（`app/services/summaries.py`），否则旧缓存会被继续使用。
+
+**仓库 / 对话 / 相关仓库**
+
+- 页面：`/app` → “我的仓库”可建仓库、加/移论文、Star、仓库对话；会话页“相关仓库”与“论文总结”两个视图。
+- 会话/仓库/单篇对话都是 SSE：`meta → citation(0..N) → token(0..N) → done`；流前错误是普通 JSON，
+  流中是 `event: error`；客户端断开保存 `status=stopped`。
+- 没有 `DEEPSEEK_API_KEY` 时对话/四维返回 503 `llm_unavailable`，其余接口不受影响。
+
+**管理员与测试账号**
+
+```bash
+uv run python -m scripts.create_admin --email admin@example.com   # 创建或提升为 admin
+```
+
+**跑测试（串行，勿并发）**
+
+```bash
+uv run pytest -q          # 当前 320 项，本机约 11 分钟
+```
+
+> 全量测试与手工 `alembic upgrade` 都会操作 `paperlens_test`，不要同时跑两个 pytest。
+
+## 页面地图
+
+两个零构建单页（同源 fetch，无外部资源、无打包步骤），由 `app/main.py` 直接托管。
+页面内部用 hash 路由；产品设计 §4.1 里的路径形式由服务端 307 别名跳转（`/sessions/1` → `/app#/sessions/1`），
+所以文档中的 URL 可以直接打开。
+
+| 地址 | 路径别名（307） | 内容 |
+| --- | --- | --- |
+| `/login` | — | 登录，成功后写 `paperlens_session` Cookie |
+| `/admin` 或 `/admin#/overview` | `/admin/overview` | 总览：9 个数字（用户/论文各状态/仓库）+ 4 个快捷入口 |
+| `/admin#/papers` | `/admin/papers` | 论文目录：导入 PDF、筛选、查看/编辑、重试、归档 |
+| `/admin#/repos` | `/admin/repos` | 仓库管理：全站仓库（含私有）、私有仓库可管理 |
+| `/admin#/users` | `/admin/users` | 用户管理：创建、改显示名/角色、启停、重置密码 |
+| `/app` | — | 主页：查询框、PDF 查询、最近会话、我的仓库、公开仓库、管理员入口 |
+| `/app#/sessions/{id}` | `/sessions/{id}` | 会话：对话（SSE）、论文总结、相关仓库 |
+| `/app#/repos` | — | 我的仓库：创建、我的/公开列表、star |
+| `/app#/repos/{id}` | `/repos/{id}` | 仓库页：左侧论文列表 + 右侧可收起对话面板、star、编辑/删除 |
+| `/app#/papers/{id}` | `/papers/{id}` | 论文详情：元数据 + 原文下载、四维三档、单篇对话、引用定位 |
+| `/app#/papers/{id}?page=3&quote=…` | `/papers/{id}?page=3&quote=…` | 引用定位：页码 + 摘录高亮 + 一键复制（不渲染 PDF 页面） |
+
+**管理员能管什么**：私有仓库可改名/改简介/改可见性/删除/增删论文/查看全部用户对话；
+公开仓库对管理员**只读**（契约权限真值表），列表里显示「只读」而非管理入口。
+
 ## 主要接口
 
 | 方法 | 路径 | 说明 |
@@ -146,6 +245,23 @@ uv run uvicorn app.main:app --reload
 | POST | `/api/v1/sessions/{id}/chat/stream` | 会话 SSE 对话 |
 | POST | `/api/v1/papers/{id}/chat/stream` | 单篇论文 SSE 对话 |
 | GET | `/api/v1/papers/{id}/messages` | 单篇论文对话历史 |
+| GET | `/api/v1/papers/{id}/summaries` | 读取四维总结（`level` 默认 standard，未缓存 404） |
+| POST | `/api/v1/papers/{id}/summaries/generate` | 生成四维总结（命中缓存直接返回） |
+| POST | `/api/v1/repos` | 创建仓库（201，默认 private） |
+| GET | `/api/v1/repos` | 仓库列表（`scope=mine/public`） |
+| GET | `/api/v1/repos/related` | 会话相关仓库推荐（相关性优先，star 加分） |
+| GET | `/api/v1/repos/{id}` | 仓库详情（含 permissions 真值表） |
+| PATCH | `/api/v1/repos/{id}` | 改名称/简介/可见性（空对象 400） |
+| DELETE | `/api/v1/repos/{id}` | 删除仓库并清理其全部对话（不删论文） |
+| GET | `/api/v1/repos/{id}/papers` | 仓库论文列表（含已归档） |
+| POST | `/api/v1/repos/{id}/papers` | 批量添加论文（200 + added/ignored） |
+| DELETE | `/api/v1/repos/{id}/papers/{paper_id}` | 移除论文（204 幂等） |
+| POST/DELETE | `/api/v1/repos/{id}/star` | Star / 取消 Star（幂等） |
+| POST | `/api/v1/repos/{id}/chat/stream` | 仓库只读 Agent SSE |
+| GET | `/api/v1/repos/{id}/messages` | 我在该仓库的对话消息 |
+| GET | `/api/v1/repos/{id}/conversations` | 仓库对话列表（私有仓库创建者/管理员看全部） |
+| GET | `/api/v1/repos/{id}/conversations/{cid}/messages` | 指定对话消息 |
+| GET | `/api/v1/admin/repos` | 后台仓库列表（含 owner_email） |
 
 认证使用 HttpOnly opaque session cookie；会话令牌以 SHA-256 哈希存库，密码使用 scrypt 哈希。
 `/api/v1/admin/*` 全部要求 `role=admin`：普通用户返回 403 `forbidden`，未登录返回 401。
@@ -188,7 +304,14 @@ PAPER_PROCESSING_TIMEOUT_MINUTES=30
 - 回答先生成并缓冲，服务端按正文首次出现顺序校验/重排 `[n]`，最多 12 条引用；无效引用重试一次，仍无有效引用则返回固定拒答文案。
 - SSE 事件顺序：`meta` → `citation` → `token` → `done`；流前错误返回普通 JSON，流中错误发送 `event: error`。断线尽量保存 `stopped` 消息。
 - `/app` 是零构建临时用户端，覆盖登录、文字/PDF 查询、最近会话、三页签、流式对话、停止和引用弹窗；D5 可替换为正式前端。
-- D3 不接 Qdrant/embedding、不做查询翻译、OCR 或四维总结；`related_repo_count` 固定 0，相关仓库由 D4 接入。
+- D3 不接 Qdrant、不做查询翻译、OCR 或四维总结；`related_repo_count` 由 D4 接入相关仓库计数。
+- **D4 已交付**：仓库 CRUD、Star、相关仓库推荐、仓库只读 Agent（SSE）、后台仓库列表；
+  `GET /admin/stats` 的 `repos_total`/`repos_private` 与 `SessionDetail.related_repo_count` 已接回真实计数。
+- **向量检索（真正的 RAG）**：`EMBEDDING_PROVIDER=local` 时用本地 `sentence-transformers` 模型
+  （默认 `BAAI/bge-small-zh-v1.5`）为每个 `paper_chunk` 生成 512 维归一化向量，存 `chunk_embeddings`；
+  检索时向量召回（余弦）+ MySQL ngram FULLTEXT 用 RRF 融合，仓库 Agent 的 `search_repo` 同样融合。
+  未启用向量（`EMBEDDING_PROVIDER=none`）时行为与 D3 完全一致。
+- 向量回填：`uv run python -m scripts.embed_chunks`；语义排序冒烟：`uv run python -m scripts.rag_smoke`。
 
 
 `app/core/ai/` 供 D2–D5 复用，不依赖具体业务：
@@ -223,21 +346,33 @@ uv run alembic check
 uv run alembic downgrade -1
 ```
 
-当前迁移 head 为 `0004_sessions_chat`（D1 为 `0002_user_roles`，D2 为 `0003_papers`）。`migrations/env.py` 从应用配置读取连接串：默认使用 `DATABASE_URL`，`APP_ENV=test` 时使用 `TEST_DATABASE_URL`。生产环境启动应用前必须先执行 `alembic upgrade head`。
+当前迁移 head 为 `0007_paper_summaries`，链：
+`0001_auth_tables → 0002_user_roles → 0003_papers → 0004_sessions_chat →
+0005_repos → 0006_chunk_embeddings → 0007_paper_summaries`。`migrations/env.py` 从应用配置读取连接串：默认使用 `DATABASE_URL`，`APP_ENV=test` 时使用 `TEST_DATABASE_URL`。生产环境启动应用前必须先执行 `alembic upgrade head`。
+
+MySQL 注意：`downgrade()` 只按反序 `drop_table`，不要写 `drop_index`（会触发 1553 外键索引错误）；FULLTEXT/ngram 索引需手写迁移。
 
 如果开发库是之前用 `create_all` 建的空表，可执行一次 `uv run alembic stamp head` 建立基线；新库直接执行 `upgrade head` 即可。
 
 ## 测试
 
 ```bash
-uv run pytest
+uv run pytest -q                 # 当前 320 项，本机约 11 分钟，串行
 uv run ruff check .
 uv run ruff format --check .
+uv run alembic check              # 模型与迁移一致
 ```
 
 测试固定使用 `TEST_DATABASE_URL`（库名必须为 `paperlens_test`）。测试会话开始时删除测试库表并执行 `alembic upgrade head`，之后每个测试只清空业务表；因此测试同时验证迁移脚本，也不会读写 `paperlens` 开发库。
 
+- 不要同时跑两个 pytest（共用 `paperlens_test`），也不要在测试运行时手工 `alembic upgrade`。
+- 测试强制 `EMBEDDING_PROVIDER=none`（`tests/conftest.py`）：不加载本地模型、不联网；
+  向量路径用 `tests/fakes.py::FakeEmbeddingProvider` 覆盖。对话一律用 `FakeLLMClient`，不打真实模型。
+- 迁移改动额外验证：`APP_ENV=test uv run alembic downgrade -1 && APP_ENV=test uv run alembic upgrade head`。
+
 ## 技术栈
 
-FastAPI + Pydantic v2 + SQLAlchemy 2.0 async + asyncmy + MySQL 8 + Alembic + OpenAI SDK（DeepSeek 兼容接口）；后续接入 Qdrant。
+FastAPI + Pydantic v2 + SQLAlchemy 2.0 async + asyncmy + MySQL 8 + Alembic + OpenAI SDK（DeepSeek 兼容接口）
++ sentence-transformers（本地 embedding，CPU 推理）+ MySQL 向量列（float32，余弦检索）。
+不引入向量数据库：课程规模下片段向量直接存 MySQL，检索在应用层做余弦 + RRF 融合。
 

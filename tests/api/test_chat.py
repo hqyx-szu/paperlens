@@ -6,12 +6,12 @@ import json
 import pytest
 from sqlalchemy import func, select
 
-from app.api.v1.endpoints.sessions import _chat_events
 from app.core.ai import REFUSAL_TEXT
 from app.core.chat import ChatScope, MessageRole, MessageStatus
 from app.core.exceptions import AppError
 from app.db import get_session_factory
 from app.models import Conversation, Message, Paper, PaperChunk
+from app.services.chat_stream import chat_events
 from tests.api.conftest import login
 from tests.fakes import FakeLLMClient
 
@@ -380,7 +380,7 @@ async def test_session_chat_stop_saves_stopped(reader_client, reader_user) -> No
     session = await _create_session(reader_client)
     conversation = await _conversation_for(session["id"], reader_user.id)
     client = _BlockingClient()
-    events = _chat_events(
+    events = chat_events(
         client=client,
         messages=[],
         retry_messages=[],

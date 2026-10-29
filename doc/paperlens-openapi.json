@@ -1179,7 +1179,7 @@
           "Summaries"
         ],
         "summary": "生成四维总结",
-        "description": "同步生成，最长等待 60 秒；缓存已存在直接返回。归档论文允许生成。并发可能重复生成，最终以后写为准。",
+        "description": "同步生成，最长等待 60 秒；缓存已存在且 force=false 时直接返回。force=true 跳过缓存、重新生成并覆盖同一缓存键。归档论文允许生成。并发可能重复生成，最终以后写为准。",
         "operationId": "generatePaperSummary",
         "security": [
           {
@@ -4095,6 +4095,11 @@
         "properties": {
           "level": {
             "$ref": "#/components/schemas/SummaryLevel"
+          },
+          "force": {
+            "type": "boolean",
+            "default": false,
+            "description": "true 时跳过缓存读取，重新生成并覆盖同一缓存键；默认 false 命中缓存直接返回"
           }
         }
       },

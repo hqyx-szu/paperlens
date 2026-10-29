@@ -4,6 +4,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.core.ai.prompts import Citation
 from app.core.papers import PaperStatus
 from app.schemas.common import UTCDatetime
 
@@ -46,6 +47,29 @@ class PaperPage(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class SummaryContent(BaseModel):
+    problem: str
+    prior_work: str
+    method_innovation: str
+    limitations: str
+
+
+class SummaryGenerateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    level: SummaryLevel = SummaryLevel.standard
+    # force=True 跳过缓存读取、重新生成并覆盖同一条缓存（契约 §8.5）。
+    force: bool = False
+
+
+class SummaryRead(BaseModel):
+    paper_id: int
+    level: SummaryLevel
+    content: SummaryContent
+    citations: list[Citation]
+    generated_at: UTCDatetime
 
 
 class PaperFileRead(BaseModel):

@@ -64,6 +64,22 @@ def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+async def get_conversation(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    scope: ChatScope,
+    scope_id: int,
+) -> Conversation | None:
+    return await db.scalar(
+        select(Conversation).where(
+            Conversation.user_id == user_id,
+            Conversation.scope_type == scope.value,
+            Conversation.scope_id == scope_id,
+        )
+    )
+
+
 async def get_or_create_conversation(
     db: AsyncSession,
     *,
@@ -71,12 +87,11 @@ async def get_or_create_conversation(
     scope: ChatScope,
     scope_id: int,
 ) -> Conversation:
-    conversation = await db.scalar(
-        select(Conversation).where(
-            Conversation.user_id == user_id,
-            Conversation.scope_type == scope.value,
-            Conversation.scope_id == scope_id,
-        )
+    conversation = await get_conversation(
+        db,
+        user_id=user_id,
+        scope=scope,
+        scope_id=scope_id,
     )
     if conversation is not None:
         return conversation

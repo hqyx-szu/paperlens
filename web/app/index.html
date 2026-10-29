@@ -15,7 +15,7 @@
     margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
     background: var(--bg); color: var(--text);
   }
-  button, input, textarea { font: inherit; }
+  button, input, textarea, select { font: inherit; }
   button { cursor: pointer; }
   .hidden { display: none !important; }
   .login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
@@ -32,11 +32,11 @@
   .brand h1 { font-size: 20px; margin: 0; }
   .subtitle { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
   label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
-  input, textarea {
+  input, textarea, select {
     width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
     background: #fff; color: var(--text); outline: none;
   }
-  input:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+  input:focus, textarea:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
   textarea { min-height: 72px; resize: vertical; }
   .btn {
     border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: 10px;
@@ -48,6 +48,7 @@
   .btn-danger { color: var(--danger); border-color: #fecaca; background: #fff5f5; }
   .btn-sm { padding: 6px 10px; font-size: 12px; border-radius: 8px; }
   .btn-block { width: 100%; margin-top: 20px; padding: 11px; }
+  .btn[disabled] { opacity: .55; cursor: not-allowed; }
   .msg { font-size: 13px; margin-top: 12px; min-height: 18px; }
   .msg.error { color: var(--danger); }
   .msg.ok { color: var(--green); }
@@ -61,6 +62,8 @@
     display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px;
     font-size: 12px; font-weight: 600; background: #f1f5f9; color: #475569;
   }
+  .badge.public { background: #ecfdf5; color: #047857; }
+  .badge.private { background: #fef3c7; color: #b45309; }
   main { max-width: 1120px; margin: 0 auto; padding: 24px; }
   .hero {
     background: linear-gradient(120deg, #eff6ff, #f5f3ff); border: 1px solid #dbeafe;
@@ -75,28 +78,52 @@
     background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
     box-shadow: var(--shadow); overflow: hidden;
   }
+  .panel + .panel { margin-top: 16px; }
   .panel-head {
     padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex;
     align-items: center; justify-content: space-between; gap: 10px;
   }
   .panel-head h3 { margin: 0; font-size: 15px; }
   .panel-body { padding: 18px; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
-  .session-list { display: grid; gap: 10px; }
-  .session-item {
+  .session-list, .repo-list { display: grid; gap: 10px; }
+  .session-item, .repo-item {
     border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: #fff;
     display: flex; justify-content: space-between; gap: 12px; align-items: center;
+    text-align: left; width: 100%;
   }
-  .session-item:hover { border-color: #bfdbfe; background: #f8faff; }
-  .session-query { font-weight: 600; word-break: break-word; }
-  .session-meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .session-item:hover, .repo-item:hover { border-color: #bfdbfe; background: #f8faff; }
+  .session-query, .repo-name { font-weight: 600; word-break: break-word; }
+  .session-meta, .repo-meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
   .empty { padding: 34px; text-align: center; color: var(--muted); font-size: 14px; }
+  .paper-detail-title { margin: 0 0 6px; font-size: 19px; line-height: 1.45; word-break: break-word; }
+  .paper-detail-meta { color: var(--muted); font-size: 13px; line-height: 1.7; }
+  .paper-detail-abstract {
+    margin-top: 10px; font-size: 13px; line-height: 1.75; color: #334155;
+    max-height: 132px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  .paper-detail-abstract:empty { display: none; }
+  .locate-banner {
+    border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 12px;
+    padding: 10px 14px; font-size: 13px; line-height: 1.7; color: #1e3a8a; word-break: break-word;
+  }
+  .locate-banner .locate-quote { margin-top: 6px; white-space: pre-wrap; color: #1e40af; }
+  .locate-banner mark { background: #fde68a; color: #78350f; padding: 0 2px; border-radius: 3px; }
   .back-btn { margin-bottom: 12px; }
-  .session-summary {
+  /* 仓库页：左侧论文列表、右侧可收起对话面板（产品设计 §4.2） */
+  .repo-workspace { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 16px; align-items: start; }
+  .repo-workspace.collapsed { grid-template-columns: 1fr; }
+  .repo-workspace.collapsed #repoChatTab { display: none; }
+  @media (max-width: 960px) {
+    .repo-workspace { grid-template-columns: 1fr; }
+  }
+  .session-summary, .repo-summary {
     background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px;
     box-shadow: var(--shadow);
   }
-  .session-summary h2 { margin: 0 0 6px; font-size: 20px; word-break: break-word; }
+  .session-summary h2, .repo-summary h2 { margin: 0 0 6px; font-size: 20px; word-break: break-word; }
+  .repo-summary p { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
   .session-stats { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
   .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-top: 16px; }
   .tab {
@@ -107,8 +134,17 @@
   .tab-panel { padding-top: 16px; }
   .papers { display: grid; gap: 10px; }
   .paper-card { border: 1px solid var(--border); border-radius: 12px; padding: 13px 15px; }
-  .paper-title { font-weight: 600; }
+  .paper-card + .paper-card { margin-top: 0; }
+  .paper-title {
+    font-weight: 600; word-break: break-word;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
   .paper-meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .paper-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .summary-grid { display: grid; gap: 10px; margin-top: 12px; }
+  .summary-block { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .summary-label { font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 4px; }
+  .summary-text { font-size: 13px; line-height: 1.75; white-space: pre-wrap; word-break: break-word; }
   .chat-panel { display: flex; flex-direction: column; min-height: 380px; }
   .messages { padding: 16px; display: flex; flex-direction: column; gap: 12px; max-height: 520px; overflow-y: auto; }
   .bubble { max-width: 82%; border-radius: 14px; padding: 10px 13px; font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
@@ -125,12 +161,20 @@
   .chat-input .btn { flex: none; }
   .chat-hint { color: var(--muted); font-size: 12px; padding: 0 12px 10px; }
   .placeholder { padding: 28px; color: var(--muted); text-align: center; font-size: 14px; }
-  dialog { border: none; border-radius: 16px; padding: 0; width: 100%; max-width: 520px; box-shadow: 0 24px 64px rgba(15,23,42,.25); }
+  .related-card { border: 1px solid var(--border); border-radius: 12px; padding: 13px 15px; }
+  .related-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+  .related-reason { color: #4338ca; background: #eef2ff; border-radius: 8px; padding: 6px 9px; font-size: 12px; margin-top: 8px; }
+  .repo-form { display: grid; gap: 10px; grid-template-columns: 1fr 1fr auto; align-items: end; }
+  .repo-form .field { margin: 0; }
+  .picker-list { max-height: 320px; overflow-y: auto; display: grid; gap: 8px; }
+  .picker-item { display: flex; gap: 10px; align-items: center; border: 1px solid var(--border); border-radius: 10px; padding: 9px 11px; }
+  .picker-item input { width: auto; }
+  dialog { border: none; border-radius: 16px; padding: 0; width: 100%; max-width: 620px; box-shadow: 0 24px 64px rgba(15,23,42,.25); }
   dialog::backdrop { background: rgba(15, 23, 42, .35); }
   .dialog-body { padding: 22px; }
   .dialog-title { margin: 0 0 10px; font-size: 18px; }
   .dialog-meta { color: var(--muted); font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
-  .dialog-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
+  .dialog-actions { display: flex; justify-content: flex-end; margin-top: 18px; gap: 8px; }
   .toast {
     position: fixed; right: 24px; bottom: 24px; z-index: 20; background: #111827; color: #fff;
     padding: 11px 16px; border-radius: 10px; font-size: 13px; box-shadow: var(--shadow);
@@ -141,8 +185,9 @@
   @media (max-width: 860px) {
     main { padding: 16px; }
     .search-row { flex-direction: column; }
-    .session-item { flex-direction: column; align-items: flex-start; }
+    .session-item, .repo-item { flex-direction: column; align-items: flex-start; }
     .bubble { max-width: 94%; }
+    .repo-form { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -162,13 +207,18 @@
 </section>
 <header id="appHeader" class="hidden">
   <div class="header-left"><span class="logo">P</span><strong>PaperLens</strong><span class="badge" id="userBadge"></span></div>
-  <div class="header-left"><a class="btn btn-sm" href="#/">首页</a><button class="btn btn-sm" id="logoutButton" type="button">退出</button></div>
+  <div class="header-left">
+    <a class="btn btn-sm" href="#/">首页</a>
+    <a class="btn btn-sm" href="#/repos">我的仓库</a>
+    <a class="btn btn-sm hidden" id="adminEntry" href="/admin">管理后台</a>
+    <button class="btn btn-sm" id="logoutButton" type="button">退出</button>
+  </div>
 </header>
 <main id="appMain" class="hidden">
   <section id="homeView">
     <div class="hero">
       <h2>搜索论文，开始带引用的对话</h2>
-      <p>输入关键词检索公开论文目录，或上传一份 PDF 作为本次查询文本。</p>
+      <p>输入关键词检索公开论文目录（向量 + 关键词混合检索），或上传一份 PDF 作为本次查询文本。</p>
       <form id="searchForm" class="search-row">
         <input id="searchInput" maxlength="2000" placeholder="例如：transformer 注意力机制" required>
         <button class="btn btn-primary" type="submit" id="searchButton">搜索</button>
@@ -184,7 +234,16 @@
       <div class="panel-head"><h3>最近会话</h3><button class="btn btn-sm" id="refreshSessions" type="button">刷新</button></div>
       <div class="panel-body"><div id="recentSessions" class="session-list"><div class="empty">还没有会话</div></div></div>
     </div>
+    <div class="panel">
+      <div class="panel-head"><h3>我的仓库</h3><a class="btn btn-sm" href="#/repos">查看全部 →</a></div>
+      <div class="panel-body"><div id="homeMyRepos" class="repo-list"><div class="empty">还没有仓库</div></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>公开仓库</h3><a class="btn btn-sm" href="#/repos">查看全部 →</a></div>
+      <div class="panel-body"><div id="homePublicRepos" class="repo-list"><div class="empty">还没有公开仓库</div></div></div>
+    </div>
   </section>
+
   <section id="sessionView" class="hidden">
     <button class="btn btn-sm back-btn" id="backButton" type="button">← 返回首页</button>
     <div class="session-summary">
@@ -211,31 +270,187 @@
       </div>
     </div>
     <div id="papersTab" class="tab-panel hidden">
-      <div class="panel"><div class="panel-head"><h3>本次论文</h3></div><div class="panel-body"><div id="paperList" class="papers"></div></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>本次论文与四维总结</h3><span class="badge">按需生成，缓存复用</span></div>
+        <div class="panel-body"><div id="paperList" class="papers"></div></div>
+      </div>
     </div>
     <div id="reposTab" class="tab-panel hidden">
-      <div class="panel"><div class="placeholder">相关仓库由 D4 接入。</div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>相关仓库</h3><span class="badge" id="relatedCount"></span></div>
+        <div class="panel-body"><div id="relatedList" class="papers"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="reposView" class="hidden">
+    <div class="panel">
+      <div class="panel-head"><h3>创建仓库</h3><span class="badge">默认私有</span></div>
+      <div class="panel-body">
+        <form id="repoForm" class="repo-form">
+          <div class="field">
+            <label for="repoName" style="margin-top:0">名称（1–64）</label>
+            <input id="repoName" maxlength="64" placeholder="例如：Transformer 精读" required>
+          </div>
+          <div class="field">
+            <label for="repoDesc" style="margin-top:0">简介（可选）</label>
+            <input id="repoDesc" maxlength="500" placeholder="一句话说明这个仓库">
+          </div>
+          <div class="field">
+            <label for="repoVisibility" style="margin-top:0">可见性</label>
+            <select id="repoVisibility">
+              <option value="private">私有</option>
+              <option value="public">公开</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" type="submit" id="repoCreateButton">创建</button>
+        </form>
+        <div class="msg error" id="repoMsg"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>我的仓库</h3><button class="btn btn-sm" id="refreshRepos" type="button">刷新</button></div>
+      <div class="panel-body"><div id="myRepos" class="repo-list"><div class="empty">还没有仓库</div></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>公开仓库</h3><span class="badge">可 star</span></div>
+      <div class="panel-body"><div id="publicRepos" class="repo-list"><div class="empty">还没有公开仓库</div></div></div>
+    </div>
+  </section>
+
+  <section id="repoView" class="hidden">
+    <button class="btn btn-sm back-btn" id="repoBackButton" type="button">← 返回仓库列表</button>
+    <div class="repo-summary">
+      <h2 id="repoTitle"></h2>
+      <p id="repoDescription"></p>
+      <div class="session-stats">
+        <span id="repoVisibilityBadge" class="badge"></span>
+        <span id="repoOwner"></span>
+        <span id="repoPaperCount"></span>
+        <span id="repoStarCount"></span>
+      </div>
+      <div class="toolbar" style="margin-top:12px" id="repoActions"></div>
+    </div>
+    <div class="repo-workspace" id="repoWorkspace">
+      <div id="repoPapersTab" class="tab-panel">
+        <div class="panel">
+          <div class="panel-head">
+            <h3>仓库论文（含已归档）</h3>
+            <div class="toolbar">
+              <button class="btn btn-sm" id="addPapersButton" type="button">添加论文</button>
+              <input id="repoPaperQuery" placeholder="按标题筛选" class="hidden" style="width:200px">
+            </div>
+          </div>
+          <div class="panel-body"><div id="repoPapers" class="papers"></div></div>
+        </div>
+      </div>
+      <div id="repoChatTab" class="tab-panel">
+        <div class="panel chat-panel">
+          <div class="panel-head">
+            <h3>仓库对话</h3>
+            <button class="btn btn-sm" id="repoChatToggle" type="button">收起</button>
+          </div>
+          <div id="repoMessages" class="messages"></div>
+          <div class="chat-hint" id="repoChatHint">只读 Agent：只在当前仓库内检索，最多 5 步。</div>
+          <form id="repoChatForm" class="chat-input">
+            <textarea id="repoChatInput" maxlength="2000" placeholder="围绕整个仓库提问…"></textarea>
+            <button class="btn btn-primary" type="submit" id="repoSendButton">发送</button>
+            <button class="btn btn-danger hidden" type="button" id="repoStopButton">停止</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="paperView" class="hidden">
+    <button class="btn btn-sm back-btn" id="paperBackButton" type="button">← 返回</button>
+    <div class="panel">
+      <div class="panel-body">
+        <h2 class="paper-detail-title" id="paperDetailTitle"></h2>
+        <div class="paper-detail-meta" id="paperDetailMeta"></div>
+        <div class="paper-detail-abstract" id="paperDetailAbstract"></div>
+        <div class="toolbar" style="margin-top:12px" id="paperDetailActions"></div>
+      </div>
+    </div>
+    <div class="locate-banner hidden" id="paperLocate"></div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>四维总结</h3>
+        <div class="toolbar">
+          <select id="paperSummaryLevel" style="width:auto">
+            <option value="brief">速览</option>
+            <option value="standard" selected>标准</option>
+            <option value="deep">深度</option>
+          </select>
+          <button class="btn btn-sm" id="paperSummaryButton" type="button">查看总结</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="hint" id="paperSummaryHint">缓存命中直接显示；「重新生成」会调用模型并覆盖这篇论文当前档位的缓存。</div>
+        <div id="paperSummaryArea" class="summary-grid"></div>
+      </div>
+    </div>
+    <div class="panel chat-panel">
+      <div id="paperMessages" class="messages"></div>
+      <div class="chat-hint" id="paperChatHint">单篇对话只使用这篇论文的片段作为证据。</div>
+      <form id="paperChatForm" class="chat-input">
+        <textarea id="paperChatInput" maxlength="2000" placeholder="就这篇论文提问…"></textarea>
+        <button class="btn btn-primary" type="submit" id="paperSendButton">发送</button>
+        <button class="btn btn-danger hidden" type="button" id="paperStopButton">停止</button>
+      </form>
     </div>
   </section>
 </main>
+
 <dialog id="citationDialog">
   <div class="dialog-body">
     <h3 class="dialog-title" id="citationTitle"></h3>
     <div class="dialog-meta" id="citationMeta"></div>
-    <div class="dialog-actions"><button class="btn" id="citationClose" type="button">关闭</button></div>
+    <div class="dialog-actions">
+      <button class="btn" id="citationOpen" type="button">打开论文</button>
+      <button class="btn" id="citationClose" type="button">关闭</button>
+    </div>
   </div>
 </dialog>
+
+<dialog id="pickerDialog">
+  <div class="dialog-body">
+    <h3 class="dialog-title">添加论文到仓库</h3>
+    <div class="dialog-meta" style="margin-bottom:12px">只列出 ready 且未归档的全局论文。</div>
+    <input id="pickerQuery" placeholder="搜索标题关键词" style="margin-bottom:12px">
+    <div id="pickerList" class="picker-list"></div>
+    <div class="msg error" id="pickerMsg"></div>
+    <div class="dialog-actions">
+      <button class="btn" id="pickerCancel" type="button">取消</button>
+      <button class="btn btn-primary" id="pickerConfirm" type="button">加入仓库</button>
+    </div>
+  </div>
+</dialog>
+
 <div class="toast" id="toast"></div>
 <script>
 const $ = (id) => document.getElementById(id);
 const API = "/api/v1";
+const SUMMARY_FIELDS = [
+  ["problem", "问题"],
+  ["prior_work", "前人工作"],
+  ["method_innovation", "方法与创新"],
+  ["limitations", "不足"],
+];
 let currentUser = null;
 let currentSession = null;
 let currentConversationId = null;
+let chatTarget = null;            // {kind: "session"|"repo", id}
 let currentController = null;
 let currentCitations = {};
 let currentAnswer = "";
 let currentAnswerNode = null;
+let currentBubbleBox = null;
+let currentRepo = null;
+let currentPaper = null;
+let paperReturnHash = "#/";
+let currentCitationIndex = null;
+let currentCitation = null;
 let toastTimer = null;
 
 function toast(message, isError = false) {
@@ -275,6 +490,7 @@ async function api(path, options = {}) {
 function showLogin(message = "") {
   currentUser = null;
   currentSession = null;
+  currentRepo = null;
   $("loginView").classList.remove("hidden");
   $("appHeader").classList.add("hidden");
   $("appMain").classList.add("hidden");
@@ -286,7 +502,9 @@ function showApp(user) {
   $("loginView").classList.add("hidden");
   $("appHeader").classList.remove("hidden");
   $("appMain").classList.remove("hidden");
-  $("userBadge").textContent = user.display_name || user.email;
+  $("userBadge").textContent = user.role === "admin" ? "admin" : "reader";
+  $("userBadge").title = `${user.display_name || ""} <${user.email}>`;
+  $("adminEntry").classList.toggle("hidden", user.role !== "admin");
   route();
 }
 
@@ -325,6 +543,18 @@ async function boot() {
   }
 }
 
+function formatTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("zh-CN");
+}
+
+function hideViews() {
+  ["homeView", "sessionView", "reposView", "repoView", "paperView"].forEach((id) => $(id).classList.add("hidden"));
+}
+
+/* ---------- 首页 ---------- */
+
 async function loadRecentSessions() {
   const box = $("recentSessions");
   try {
@@ -362,12 +592,6 @@ async function loadRecentSessions() {
   }
 }
 
-function formatTime(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("zh-CN");
-}
-
 async function submitSearch(event) {
   event.preventDefault();
   const query = $("searchInput").value.trim();
@@ -401,12 +625,17 @@ async function uploadPdf(file) {
   }
 }
 
+/* ---------- 会话页 ---------- */
+
 async function loadSession(id) {
   try {
     const detail = await api(`/sessions/${id}`);
     currentSession = detail;
+    currentRepo = null;
     currentConversationId = detail.conversation_id;
-    $("homeView").classList.add("hidden");
+    chatTarget = { kind: "session", id: detail.id };
+    currentBubbleBox = "messages";
+    hideViews();
     $("sessionView").classList.remove("hidden");
     $("sessionQuery").textContent = detail.query;
     $("sessionType").textContent = detail.query_type === "pdf" ? "PDF 查询" : "文字查询";
@@ -419,8 +648,9 @@ async function loadSession(id) {
       ? "回答会先完成引用校验，再逐段返回。"
       : "当前会话没有证据，不能对话。请返回修改查询。";
     renderPapers(detail.papers || []);
-    await loadMessages(detail);
+    renderRelated(null);
     switchTab("chat");
+    await loadMessages(detail);
   } catch (error) {
     toast(error.message, true);
     location.hash = "#/";
@@ -435,53 +665,123 @@ function renderPapers(papers) {
     return;
   }
   for (const paper of papers) {
-    const card = document.createElement("div");
-    card.className = "paper-card";
-    const title = document.createElement("div");
-    title.className = "paper-title";
-    title.textContent = paper.title;
-    const meta = document.createElement("div");
-    meta.className = "paper-meta";
-    const authors = (paper.authors || []).join(", ") || "作者未知";
-    meta.textContent = `${authors} · ${paper.year || "年份未知"} · ${paper.venue || "venue 未知"}${paper.is_archived ? " · 已归档" : ""}`;
-    card.append(title, meta);
-    box.append(card);
+    box.append(buildPaperCard(paper, { showSummary: true }));
   }
 }
 
-function switchTab(name) {
-  document.querySelectorAll(".tab").forEach((tab) => {
-    tab.classList.toggle("active", tab.dataset.tab === name);
+function buildPaperCard(paper, { showSummary = false, onRemove = null } = {}) {
+  const card = document.createElement("div");
+  card.className = "paper-card";
+  card.style.cursor = "pointer";
+  card.addEventListener("click", (event) => {
+    if (event.target.closest("button")) return;
+    paperReturnHash = location.hash || "#/";
+    location.hash = `#/papers/${paper.id}`;
   });
-  $("chatTab").classList.toggle("hidden", name !== "chat");
-  $("papersTab").classList.toggle("hidden", name !== "papers");
-  $("reposTab").classList.toggle("hidden", name !== "repos");
-}
+  const title = document.createElement("div");
+  title.className = "paper-title";
+  title.textContent = paper.title;
+  title.title = paper.title;
+  const meta = document.createElement("div");
+  meta.className = "paper-meta";
+  const authors = (paper.authors || []).join(", ") || "作者未知";
+  meta.textContent = `${authors} · ${paper.year || "年份未知"} · ${paper.venue || "venue 未知"}${paper.is_archived ? " · 已归档" : ""}`;
+  card.append(title, meta);
 
-function addMessage(role, content, citations = [], status = "complete") {
-  const box = $("messages");
-  const bubble = document.createElement("div");
-  bubble.className = `bubble ${role === "assistant" ? "assistant" : role}`;
-  if (status === "error") bubble.classList.add("error");
-  if (role === "assistant") {
-    currentAnswerNode = bubble;
-    renderAnswer(bubble, content, citations);
-  } else {
-    bubble.textContent = content;
+  if (onRemove) {
+    const actions = document.createElement("div");
+    actions.className = "paper-actions";
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "btn btn-sm btn-danger";
+    remove.textContent = "移出仓库";
+    remove.addEventListener("click", () => onRemove(paper));
+    actions.append(remove);
+    card.append(actions);
   }
-  box.append(bubble);
-  box.scrollTop = box.scrollHeight;
-  return bubble;
+
+  if (showSummary) {
+    const actions = document.createElement("div");
+    actions.className = "paper-actions";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn btn-sm";
+    button.textContent = "查看四维总结";
+    const area = document.createElement("div");
+    area.className = "summary-grid";
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      button.textContent = "加载中…";
+      try {
+        let summary = null;
+        try {
+          summary = await api(`/papers/${paper.id}/summaries?level=standard`);
+        } catch (error) {
+          if (!error.message.includes("还没有生成")) throw error;
+        }
+        if (!summary) {
+          button.textContent = "生成四维总结";
+          button.disabled = false;
+          button.onclick = null;
+          button.addEventListener("click", async () => {
+            button.disabled = true;
+            button.textContent = "生成中…";
+            try {
+              const generated = await api(`/papers/${paper.id}/summaries/generate`, {
+                method: "POST",
+                body: JSON.stringify({ level: "standard" }),
+              });
+              renderSummaryArea(area, generated);
+              button.textContent = "已生成";
+            } catch (error) {
+              button.disabled = false;
+              button.textContent = "生成四维总结";
+              toast(error.message, true);
+            }
+          }, { once: true });
+          return;
+        }
+        renderSummaryArea(area, summary);
+        button.textContent = "收起/展开";
+        button.disabled = false;
+        button.onclick = () => area.classList.toggle("hidden");
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = "查看四维总结";
+        toast(error.message, true);
+      }
+    });
+    actions.append(button);
+    card.append(actions, area);
+  }
+  return card;
 }
 
-function renderAnswer(bubble, text, citations) {
-  bubble.innerHTML = "";
-  const map = new Map((citations || []).map((item) => [Number(item.index), item]));
+function renderSummaryArea(area, summary) {
+  area.innerHTML = "";
+  const map = new Map((summary.citations || []).map((item) => [Number(item.index), item]));
+  for (const [key, label] of SUMMARY_FIELDS) {
+    const block = document.createElement("div");
+    block.className = "summary-block";
+    const title = document.createElement("div");
+    title.className = "summary-label";
+    title.textContent = label;
+    const text = document.createElement("div");
+    text.className = "summary-text";
+    renderRichText(text, summary.content?.[key] || "论文未明确说明", map);
+    block.append(title, text);
+    area.append(block);
+  }
+}
+
+/* 把 [n] 渲染成可点击的引用按钮 */
+function renderRichText(node, text, map) {
+  node.innerHTML = "";
   const pattern = /\[(\d+)\]/g;
   let last = 0;
   let match;
   while ((match = pattern.exec(text)) !== null) {
-    if (match.index > last) bubble.append(document.createTextNode(text.slice(last, match.index)));
+    if (match.index > last) node.append(document.createTextNode(text.slice(last, match.index)));
     const index = Number(match[1]);
     if (map.has(index)) {
       const button = document.createElement("button");
@@ -490,18 +790,95 @@ function renderAnswer(bubble, text, citations) {
       button.textContent = `[${index}]`;
       button.title = "查看引用";
       button.addEventListener("click", () => showCitation(map.get(index)));
-      bubble.append(button);
+      node.append(button);
     } else {
-      bubble.append(document.createTextNode(match[0]));
+      node.append(document.createTextNode(match[0]));
     }
     last = match.index + match[0].length;
   }
-  bubble.append(document.createTextNode(text.slice(last)));
-  bubble.dataset.text = text;
+  node.append(document.createTextNode(text.slice(last)));
+}
+
+function switchTab(name) {
+  document.querySelectorAll(".tab[data-tab]").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.tab === name);
+  });
+  $("chatTab").classList.toggle("hidden", name !== "chat");
+  $("papersTab").classList.toggle("hidden", name !== "papers");
+  $("reposTab").classList.toggle("hidden", name !== "repos");
+  if (name === "repos" && currentSession) renderRelated(currentSession.id);
+}
+
+function renderRelated(sessionId) {
+  const list = $("relatedList");
+  const count = $("relatedCount");
+  list.innerHTML = '<div class="placeholder">加载中…</div>';
+  if (count) count.textContent = "";
+  if (!sessionId) { list.innerHTML = '<div class="empty">搜索后这里会显示相关公开仓库。</div>'; return; }
+  api(`/repos/related?session_id=${sessionId}&page_size=20`).then((data) => {
+    list.innerHTML = "";
+    if (count) count.textContent = `${data.total} 个`;
+    if (!data.items.length) {
+      list.innerHTML = '<div class="empty">没有相关仓库。可以去公开仓库浏览，或换一种问法。</div>';
+      return;
+    }
+    for (const item of data.items) {
+      const card = document.createElement("div");
+      card.className = "related-card";
+      const head = document.createElement("div");
+      head.className = "related-head";
+      const left = document.createElement("div");
+      const name = document.createElement("div");
+      name.className = "paper-title";
+      name.textContent = item.name;
+      name.title = item.name;
+      const meta = document.createElement("div");
+      meta.className = "paper-meta";
+      meta.textContent = `${item.owner?.display_name || "匿名"} · ${item.paper_count} 篇论文 · ${item.star_count} star`;
+      left.append(name, meta);
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "btn btn-sm";
+      open.textContent = "打开仓库";
+      open.addEventListener("click", () => { location.hash = `#/repos/${item.id}`; });
+      head.append(left, open);
+      const desc = document.createElement("p");
+      desc.className = "paper-meta";
+      desc.textContent = item.description || "（无简介）";
+      const reason = document.createElement("div");
+      reason.className = "related-reason";
+      reason.textContent = `推荐理由：${item.reason}`;
+      card.append(head, desc, reason);
+      list.append(card);
+    }
+  }).catch((error) => {
+    list.innerHTML = "";
+    const node = document.createElement("div");
+    node.className = "empty";
+    node.textContent = error.message;
+    list.append(node);
+  });
+}
+
+function addMessage(role, content, citations = [], status = "complete", boxId = "messages") {
+  const box = $(boxId);
+  const bubble = document.createElement("div");
+  bubble.className = `bubble ${role === "assistant" ? "assistant" : role}`;
+  if (status === "error") bubble.classList.add("error");
+  if (role === "assistant") {
+    currentAnswerNode = bubble;
+    renderRichText(bubble, content, new Map((citations || []).map((item) => [Number(item.index), item])));
+  } else {
+    bubble.textContent = content;
+  }
+  box.append(bubble);
+  box.scrollTop = box.scrollHeight;
+  return bubble;
 }
 
 function showCitation(citation) {
   if (!citation) return;
+  currentCitation = citation;
   $("citationTitle").textContent = `引用 [${citation.index}]`;
   $("citationMeta").textContent = "";
   $("citationDialog").showModal();
@@ -544,6 +921,56 @@ async function loadMessages(detail) {
   box.scrollTop = box.scrollHeight;
 }
 
+function emitChat(url, question, { onDone, boxId }) {
+  currentBubbleBox = boxId;
+  currentAnswer = "";
+  currentCitations = {};
+  currentAnswerNode = null;
+  addMessage("user", question, [], "complete", boxId);
+  const answerBubble = addMessage("assistant", "", [], "complete", boxId);
+  currentAnswerNode = answerBubble;
+  setStreaming(true);
+  const controller = new AbortController();
+  currentController = controller;
+  streamRequest(url, question, controller).catch((error) => {
+    if (error.name !== "AbortError") {
+      toast(error.message, true);
+      answerBubble.classList.add("error");
+      if (!currentAnswer) answerBubble.textContent = error.message;
+    }
+  }).finally(() => {
+    if (currentController === controller) {
+      currentController = null;
+      setStreaming(false);
+      if (onDone) onDone();
+    }
+  });
+}
+
+async function streamRequest(url, question, controller) {
+  const response = await fetch(url, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: question }),
+    signal: controller.signal,
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  if (!response.body) throw new Error("浏览器不支持流式响应");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const frames = buffer.split("\n\n");
+    buffer = frames.pop() || "";
+    for (const frame of frames) handleSseFrame(frame);
+  }
+  if (buffer.trim()) handleSseFrame(buffer);
+}
+
 async function sendChat(event) {
   event.preventDefault();
   if (!currentSession || !currentSession.has_evidence || currentController) return;
@@ -551,48 +978,10 @@ async function sendChat(event) {
   const question = input.value.trim();
   if (!question) return;
   input.value = "";
-  currentAnswer = "";
-  currentCitations = {};
-  addMessage("user", question);
-  const answerBubble = addMessage("assistant", "");
-  currentAnswerNode = answerBubble;
-  setStreaming(true);
-  const controller = new AbortController();
-  currentController = controller;
-  try {
-    const response = await fetch(`${API}/sessions/${currentSession.id}/chat/stream`, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: question }),
-      signal: controller.signal,
-    });
-    if (!response.ok) throw new Error(await readError(response));
-    if (!response.body) throw new Error("浏览器不支持流式响应");
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const frames = buffer.split("\n\n");
-      buffer = frames.pop() || "";
-      for (const frame of frames) handleSseFrame(frame);
-    }
-    if (buffer.trim()) handleSseFrame(buffer);
-  } catch (error) {
-    if (error.name !== "AbortError") {
-      toast(error.message, true);
-      answerBubble.classList.add("error");
-      if (!currentAnswer) answerBubble.textContent = error.message;
-    }
-  } finally {
-    if (currentController === controller) {
-      currentController = null;
-      setStreaming(false);
-    }
-  }
+  emitChat(`${API}/sessions/${currentSession.id}/chat/stream`, question, {
+    boxId: "messages",
+    onDone: () => loadMessages(currentSession),
+  });
 }
 
 function handleSseFrame(frame) {
@@ -610,10 +999,14 @@ function handleSseFrame(frame) {
     currentConversationId = payload.conversation_id;
   } else if (event === "citation") {
     currentCitations[payload.index] = payload;
-    if (currentAnswerNode) renderAnswer(currentAnswerNode, currentAnswer, Object.values(currentCitations));
+    if (currentAnswerNode) {
+      renderRichText(currentAnswerNode, currentAnswer, new Map(Object.entries(currentCitations).map(([key, value]) => [Number(key), value])));
+    }
   } else if (event === "token") {
     currentAnswer += payload.text || "";
-    if (currentAnswerNode) renderAnswer(currentAnswerNode, currentAnswer, Object.values(currentCitations));
+    if (currentAnswerNode) {
+      renderRichText(currentAnswerNode, currentAnswer, new Map(Object.entries(currentCitations).map(([key, value]) => [Number(key), value])));
+    }
   } else if (event === "error") {
     toast(payload.message || "生成失败", true);
     if (currentAnswerNode) {
@@ -622,14 +1015,19 @@ function handleSseFrame(frame) {
     }
   } else if (event === "done") {
     toast("回答完成");
-    if (currentSession) loadMessages(currentSession);
   }
 }
 
 function setStreaming(active) {
-  $("sendButton").classList.toggle("hidden", active);
-  $("stopButton").classList.toggle("hidden", !active);
-  $("chatInput").disabled = active || !currentSession?.has_evidence;
+  const targets = {
+    session: ["sendButton", "stopButton", "chatInput"],
+    repo: ["repoSendButton", "repoStopButton", "repoChatInput"],
+    paper: ["paperSendButton", "paperStopButton", "paperChatInput"],
+  };
+  const [sendId, stopId, inputId] = targets[chatTarget?.kind] || targets.session;
+  $(sendId).classList.toggle("hidden", active);
+  $(stopId).classList.toggle("hidden", !active);
+  $(inputId).disabled = active;
 }
 
 function stopChat() {
@@ -638,23 +1036,589 @@ function stopChat() {
     currentController = null;
     setStreaming(false);
     toast("已停止生成");
-    if (currentSession) loadMessages(currentSession);
+    if (chatTarget?.kind === "repo" && currentRepo) loadRepoMessages(currentRepo.id);
+    else if (chatTarget?.kind === "paper" && currentPaper) loadPaperMessages(currentPaper.id);
+    else if (currentSession) loadMessages(currentSession);
   }
 }
 
+/* ---------- 论文详情 ---------- */
+
+const SUMMARY_LEVEL_LABELS = { brief: "速览", standard: "标准", deep: "深度" };
+
+async function loadPaper(id, locate = null) {
+  hideViews();
+  $("paperView").classList.remove("hidden");
+  chatTarget = { kind: "paper", id };
+  currentPaper = null;
+  $("paperDetailTitle").textContent = "加载中…";
+  $("paperDetailMeta").textContent = "";
+  $("paperDetailAbstract").textContent = "";
+  $("paperDetailActions").innerHTML = "";
+  $("paperSummaryArea").innerHTML = '<div class="empty">选一档，点「查看总结」。</div>';
+  $("paperMessages").innerHTML = "";
+  $("paperLocate").classList.add("hidden");
+  $("paperSummaryButton").textContent = "查看总结";
+  $("paperSummaryButton").dataset.mode = "load";
+  try {
+    const paper = await api(`/papers/${id}`);
+    currentPaper = paper;
+    document.title = `${paper.title} · PaperLens`;
+    $("paperDetailTitle").textContent = paper.title;
+    const authors = (paper.authors || []).join(", ") || "作者未知";
+    $("paperDetailMeta").textContent = [
+      authors,
+      paper.year || "年份未知",
+      paper.venue || "venue 未知",
+      `DOI：${paper.doi || "无"}`,
+      paper.is_archived ? "已归档" : "在架",
+    ].join(" · ");
+    $("paperDetailAbstract").textContent = paper.abstract ? `摘要：${paper.abstract}` : "";
+    renderPaperActions(paper);
+    renderPaperLocate(locate);
+    $("paperChatHint").textContent = paper.can_chat
+      ? "单篇对话只使用这篇论文的片段作为证据。"
+      : "这篇论文还在处理或没有可用片段，暂时不能对话。";
+    $("paperChatInput").disabled = !paper.can_chat;
+    $("paperSendButton").disabled = !paper.can_chat;
+    await loadPaperMessages(id);
+  } catch (error) {
+    $("paperDetailTitle").textContent = "论文打不开";
+    $("paperDetailMeta").textContent = error.message;
+  }
+}
+
+function renderPaperActions(paper) {
+  const box = $("paperDetailActions");
+  box.innerHTML = "";
+  if (paper.has_file && paper.can_download) {
+    const link = document.createElement("a");
+    link.className = "btn btn-sm";
+    link.href = `${API}/papers/${paper.id}/download`;
+    link.textContent = "下载原文 PDF";
+    box.append(link);
+  } else {
+    const note = document.createElement("span");
+    note.className = "hint";
+    note.textContent = paper.has_file ? "当前账号无权下载原文" : "没有可下载的原文";
+    box.append(note);
+  }
+}
+
+function renderPaperLocate(locate) {
+  const box = $("paperLocate");
+  if (!locate || (!locate.page && !locate.quote)) {
+    box.classList.add("hidden");
+    return;
+  }
+  box.classList.remove("hidden");
+  box.innerHTML = "";
+  const head = document.createElement("div");
+  head.textContent = locate.page ? `引用定位：第 ${locate.page} 页` : "引用定位";
+  box.append(head);
+  if (locate.quote) {
+    const quote = document.createElement("div");
+    quote.className = "locate-quote";
+    const mark = document.createElement("mark");
+    mark.textContent = locate.quote;
+    quote.append(mark);
+    box.append(quote);
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "btn btn-sm";
+    copy.style.marginTop = "8px";
+    copy.textContent = "复制摘录";
+    copy.addEventListener("click", async () => {
+      const text = locate.page ? `第 ${locate.page} 页：${locate.quote}` : locate.quote;
+      try {
+        await navigator.clipboard.writeText(text);
+        toast("已复制摘录");
+      } catch (_) {
+        toast("复制失败，请手动选择文本", true);
+      }
+    });
+    box.append(copy);
+  }
+  const note = document.createElement("div");
+  note.style.marginTop = "6px";
+  note.style.opacity = "0.75";
+  note.textContent = "这里只展示引用摘录与页码，不渲染 PDF 页面本身。";
+  box.append(note);
+}
+
+async function loadPaperSummary({ action = "load" } = {}) {
+  if (!currentPaper) return;
+  const level = $("paperSummaryLevel").value;
+  const button = $("paperSummaryButton");
+  const area = $("paperSummaryArea");
+  const isForce = action === "force";
+  const isGenerate = isForce || action === "create";
+  button.disabled = true;
+  button.textContent = isForce ? "重新生成中…" : isGenerate ? "生成中…" : "加载中…";
+  try {
+    const summary = isGenerate
+      ? await api(`/papers/${currentPaper.id}/summaries/generate`, {
+          method: "POST",
+          body: JSON.stringify({ level, force: isForce }),
+        })
+      : await api(`/papers/${currentPaper.id}/summaries?level=${level}`);
+    renderSummaryArea(area, summary);
+    button.textContent = "重新生成";
+    button.dataset.mode = "force";
+    button.disabled = false;
+    if (isForce) toast("已重新生成，并覆盖该档位缓存");
+    else if (isGenerate) toast("已生成四维总结");
+  } catch (error) {
+    const missing = !isGenerate && String(error.message).includes("还没有生成");
+    if (missing) {
+      area.innerHTML = `<div class="empty">还没有「${SUMMARY_LEVEL_LABELS[level] || level}」版总结，点「生成总结」。</div>`;
+      button.textContent = "生成总结";
+      button.dataset.mode = "create";
+      button.disabled = false;
+      return;
+    }
+    button.disabled = false;
+    button.textContent = isGenerate ? "生成总结" : "查看总结";
+    button.dataset.mode = isGenerate ? "create" : "load";
+    toast(error.message, true);
+  }
+}
+
+async function loadPaperMessages(paperId) {
+  const box = $("paperMessages");
+  box.innerHTML = "";
+  try {
+    const data = await api(`/papers/${paperId}/messages?limit=50`);
+    const items = data.items.slice().reverse();
+    if (!items.length) {
+      box.innerHTML = '<div class="empty">还没有关于这篇论文的对话，问一句试试。</div>';
+      return;
+    }
+    for (const message of items) {
+      addMessage(message.role, message.content, message.citations || [], message.status, "paperMessages");
+    }
+  } catch (error) {
+    box.innerHTML = "";
+    const note = document.createElement("div");
+    note.className = "empty";
+    note.textContent = error.message;
+    box.append(note);
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+function sendPaperChat(event) {
+  event.preventDefault();
+  if (!currentPaper || currentController) return;
+  if (!currentPaper.can_chat) {
+    toast("这篇论文暂时不能对话", true);
+    return;
+  }
+  const input = $("paperChatInput");
+  const question = input.value.trim();
+  if (!question) return;
+  input.value = "";
+  emitChat(`${API}/papers/${currentPaper.id}/chat/stream`, question, {
+    boxId: "paperMessages",
+    onDone: () => loadPaperMessages(currentPaper.id),
+  });
+}
+
+/* ---------- 仓库 ---------- */
+
+function repoCard(item) {
+  const card = document.createElement("button");
+  card.type = "button";
+  card.className = "repo-item";
+  card.addEventListener("click", () => { location.hash = `#/repos/${item.id}`; });
+  const left = document.createElement("div");
+  const name = document.createElement("div");
+  name.className = "repo-name";
+  name.textContent = item.name;
+  const meta = document.createElement("div");
+  meta.className = "repo-meta";
+  const visibility = item.visibility === "public" ? "公开" : "私有";
+  meta.textContent = `${visibility} · ${item.paper_count} 篇论文 · ${item.star_count} star · 更新于 ${formatTime(item.updated_at)}`;
+  left.append(name, meta);
+  const badge = document.createElement("span");
+  badge.className = "badge " + item.visibility;
+  badge.textContent = visibility;
+  card.append(left, badge);
+  return card;
+}
+
+async function showRepos() {
+  currentRepo = null;
+  currentSession = null;
+  chatTarget = null;
+  hideViews();
+  $("reposView").classList.remove("hidden");
+  await Promise.all([loadMyRepos(), loadPublicRepos()]);
+}
+
+async function loadMyRepos() {
+  const box = $("myRepos");
+  try {
+    const data = await api("/repos?scope=mine&page_size=50");
+    box.innerHTML = "";
+    if (!data.items.length) {
+      box.innerHTML = '<div class="empty">还没有仓库，用上面的表单创建一个。</div>';
+      return;
+    }
+    for (const item of data.items) box.append(repoCard(item));
+  } catch (error) {
+    box.innerHTML = "";
+    const node = document.createElement("div");
+    node.className = "empty";
+    node.textContent = error.message;
+    box.append(node);
+  }
+}
+
+async function loadPublicRepos() {
+  const box = $("publicRepos");
+  try {
+    const data = await api("/repos?scope=public&page_size=50");
+    box.innerHTML = "";
+    if (!data.items.length) {
+      box.innerHTML = '<div class="empty">还没有公开仓库。</div>';
+      return;
+    }
+    for (const item of data.items) box.append(repoCard(item));
+  } catch (error) {
+    box.innerHTML = "";
+    const node = document.createElement("div");
+    node.className = "empty";
+    node.textContent = error.message;
+    box.append(node);
+  }
+}
+
+async function createRepo(event) {
+  event.preventDefault();
+  const button = $("repoCreateButton");
+  button.disabled = true;
+  $("repoMsg").textContent = "";
+  try {
+    const repo = await api("/repos", {
+      method: "POST",
+      body: JSON.stringify({
+        name: $("repoName").value.trim(),
+        description: $("repoDesc").value.trim(),
+        visibility: $("repoVisibility").value,
+      }),
+    });
+    $("repoName").value = "";
+    $("repoDesc").value = "";
+    toast("仓库已创建");
+    location.hash = `#/repos/${repo.id}`;
+  } catch (error) {
+    $("repoMsg").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function loadRepo(id) {
+  try {
+    const repo = await api(`/repos/${id}`);
+    currentRepo = repo;
+    currentSession = null;
+    chatTarget = { kind: "repo", id: repo.id };
+    hideViews();
+    $("repoView").classList.remove("hidden");
+    $("repoTitle").textContent = repo.name;
+    $("repoDescription").textContent = repo.description || "（无简介）";
+    const badge = $("repoVisibilityBadge");
+    badge.className = "badge " + repo.visibility;
+    badge.textContent = repo.visibility === "public" ? "公开" : "私有";
+    $("repoOwner").textContent = `创建者：${repo.owner?.display_name || "匿名"}`;
+    $("repoPaperCount").textContent = `${repo.paper_count} 篇论文`;
+    $("repoStarCount").textContent = `${repo.star_count} star`;
+    renderRepoActions(repo);
+    switchRepoTab("papers");
+    setRepoChatCollapsed(false);
+    await Promise.all([loadRepoPapers(repo), loadRepoMessages(repo.id)]);
+  } catch (error) {
+    toast(error.message, true);
+    location.hash = "#/repos";
+  }
+}
+
+function renderRepoActions(repo) {
+  const box = $("repoActions");
+  box.innerHTML = "";
+  const permissions = repo.permissions || {};
+
+  if (permissions.can_edit) {
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "btn btn-sm";
+    edit.textContent = "编辑名称/简介";
+    edit.addEventListener("click", async () => {
+      const name = prompt("仓库名称（1–64）", repo.name);
+      if (name === null) return;
+      const description = prompt("简介（可留空）", repo.description || "");
+      if (description === null) return;
+      try {
+        await api(`/repos/${repo.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ name: name.trim(), description: description.trim() }),
+        });
+        toast("已保存");
+        loadRepo(repo.id);
+      } catch (error) { toast(error.message, true); }
+    });
+    box.append(edit);
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "btn btn-sm";
+    toggle.textContent = repo.visibility === "public" ? "转为私有" : "转为公开";
+    toggle.addEventListener("click", async () => {
+      try {
+        await api(`/repos/${repo.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ visibility: repo.visibility === "public" ? "private" : "public" }),
+        });
+        toast("已更新可见性");
+        loadRepo(repo.id);
+      } catch (error) { toast(error.message, true); }
+    });
+    box.append(toggle);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "btn btn-sm btn-danger";
+    remove.textContent = "删除仓库";
+    remove.addEventListener("click", async () => {
+      if (!confirm(`删除仓库「${repo.name}」？仓库内的对话会一并删除，论文本身不受影响。`)) return;
+      try {
+        await api(`/repos/${repo.id}`, { method: "DELETE" });
+        toast("仓库已删除");
+        location.hash = "#/repos";
+      } catch (error) { toast(error.message, true); }
+    });
+    box.append(remove);
+  }
+
+  if (permissions.can_star) {
+    const star = document.createElement("button");
+    star.type = "button";
+    star.className = "btn btn-sm";
+    star.textContent = repo.is_starred ? "取消 Star" : "Star";
+    star.addEventListener("click", async () => {
+      star.disabled = true;
+      try {
+        await api(`/repos/${repo.id}/star`, { method: repo.is_starred ? "DELETE" : "POST" });
+        toast(repo.is_starred ? "已取消 Star" : "已 Star");
+        loadRepo(repo.id);
+      } catch (error) {
+        star.disabled = false;
+        toast(error.message, true);
+      }
+    });
+    box.append(star);
+  }
+}
+
+function switchRepoTab(name) {
+  // 双栏布局后不再用页签切换；保留函数以兼容旧调用，确保两个面板都可见。
+  $("repoPapersTab").classList.remove("hidden");
+  if (name === "chat") $("repoWorkspace").classList.remove("collapsed");
+}
+
+function setRepoChatCollapsed(collapsed) {
+  $("repoWorkspace").classList.toggle("collapsed", collapsed);
+  $("repoChatToggle").textContent = collapsed ? "展开对话" : "收起";
+}
+
+async function loadRepoPapers(repo) {
+  const box = $("repoPapers");
+  try {
+    const data = await api(`/repos/${repo.id}/papers?page_size=100`);
+    box.innerHTML = "";
+    $("addPapersButton").classList.toggle("hidden", !repo.permissions?.can_manage_papers);
+    if (!data.items.length) {
+      box.innerHTML = repo.permissions?.can_manage_papers
+        ? '<div class="empty">仓库还没有论文，点“添加论文”从全局目录挑一些。</div>'
+        : '<div class="empty">仓库还没有论文。</div>';
+      return;
+    }
+    for (const paper of data.items) {
+      box.append(buildPaperCard(paper, {
+        onRemove: repo.permissions?.can_manage_papers ? () => removePaper(repo, paper) : null,
+      }));
+    }
+  } catch (error) {
+    box.innerHTML = "";
+    const node = document.createElement("div");
+    node.className = "empty";
+    node.textContent = error.message;
+    box.append(node);
+  }
+}
+
+async function removePaper(repo, paper) {
+  if (!confirm(`把《${paper.title}》移出仓库？`)) return;
+  try {
+    await api(`/repos/${repo.id}/papers/${paper.id}`, { method: "DELETE" });
+    toast("已移出仓库");
+    loadRepo(repo.id);
+  } catch (error) { toast(error.message, true); }
+}
+
+async function loadRepoMessages(repoId) {
+  const box = $("repoMessages");
+  box.innerHTML = "";
+  try {
+    const data = await api(`/repos/${repoId}/messages?limit=50`);
+    const items = data.items.slice().reverse();
+    if (!items.length) {
+      box.innerHTML = '<div class="bubble system">仓库对话只属于你自己。这里还没有消息，提问试试。</div>';
+      return;
+    }
+    for (const message of items) {
+      addMessage(message.role, message.content, message.citations || [], message.status, "repoMessages");
+    }
+  } catch (error) {
+    toast(error.message, true);
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+function sendRepoChat(event) {
+  event.preventDefault();
+  if (!currentRepo || currentController) return;
+  const input = $("repoChatInput");
+  const question = input.value.trim();
+  if (!question) return;
+  input.value = "";
+  emitChat(`${API}/repos/${currentRepo.id}/chat/stream`, question, {
+    boxId: "repoMessages",
+    onDone: () => loadRepoMessages(currentRepo.id),
+  });
+}
+
+async function openPaperPicker() {
+  if (!currentRepo) return;
+  $("pickerMsg").textContent = "";
+  $("pickerQuery").value = "";
+  $("pickerDialog").showModal();
+  await loadPickerItems("");
+}
+
+async function loadPickerItems(keyword) {
+  const list = $("pickerList");
+  list.innerHTML = '<div class="placeholder">加载中…</div>';
+  try {
+    const query = encodeURIComponent(keyword || "");
+    const data = await api(`/papers?page_size=100&q=${query}`);
+    list.innerHTML = "";
+    if (!data.items.length) {
+      list.innerHTML = '<div class="empty">没有匹配的论文。</div>';
+      return;
+    }
+    for (const paper of data.items) {
+      const row = document.createElement("label");
+      row.className = "picker-item";
+      const check = document.createElement("input");
+      check.type = "checkbox";
+      check.value = String(paper.id);
+      const text = document.createElement("span");
+      const authors = (paper.authors || []).join(", ") || "作者未知";
+      text.textContent = `${paper.title} · ${authors} · ${paper.year || "年份未知"}`;
+      row.append(check, text);
+      list.append(row);
+    }
+  } catch (error) {
+    list.innerHTML = "";
+    const node = document.createElement("div");
+    node.className = "empty";
+    node.textContent = error.message;
+    list.append(node);
+  }
+}
+
+async function confirmPicker() {
+  if (!currentRepo) return;
+  const ids = Array.from(document.querySelectorAll("#pickerList input:checked")).map((node) => Number(node.value));
+  if (!ids.length) { $("pickerMsg").textContent = "请先勾选论文。"; return; }
+  try {
+    const result = await api(`/repos/${currentRepo.id}/papers`, {
+      method: "POST",
+      body: JSON.stringify({ paper_ids: ids }),
+    });
+    $("pickerDialog").close();
+    const ignored = result.ignored || [];
+    const reasonText = ignored.map((item) => `${item.paper_id}:${item.reason}`).join("，");
+    toast(`已加入 ${result.added.length} 篇${ignored.length ? `；忽略 ${reasonText}` : ""}`);
+    loadRepo(currentRepo.id);
+  } catch (error) {
+    $("pickerMsg").textContent = error.message;
+  }
+}
+
+/* ---------- 路由 ---------- */
+
 function route() {
   if (!currentUser) return;
-  const match = location.hash.match(/^#\/sessions\/(\d+)$/);
-  if (match) loadSession(Number(match[1]));
-  else showHome();
+  const paperMatch = location.hash.match(/^#\/papers\/(\d+)(?:\?(.*))?$/);
+  if (paperMatch) {
+    const params = new URLSearchParams(paperMatch[2] || "");
+    const page = Number(params.get("page"));
+    loadPaper(Number(paperMatch[1]), {
+      page: Number.isFinite(page) && page > 0 ? page : null,
+      quote: params.get("quote") || "",
+    });
+    return;
+  }
+  const sessionMatch = location.hash.match(/^#\/sessions\/(\d+)$/);
+  if (sessionMatch) { loadSession(Number(sessionMatch[1])); return; }
+  const repoMatch = location.hash.match(/^#\/repos\/(\d+)$/);
+  if (repoMatch) { loadRepo(Number(repoMatch[1])); return; }
+  if (location.hash.startsWith("#/repos")) { showRepos(); return; }
+  showHome();
 }
 
 function showHome() {
   if (currentController) currentController.abort();
   currentSession = null;
-  $("sessionView").classList.add("hidden");
+  currentRepo = null;
+  currentPaper = null;
+  chatTarget = null;
+  document.title = "PaperLens";
+  hideViews();
   $("homeView").classList.remove("hidden");
   loadRecentSessions();
+  loadHomeRepos();
+}
+
+async function loadHomeRepos() {
+  const targets = [
+    { id: "homeMyRepos", scope: "mine", empty: "还没有仓库" },
+    { id: "homePublicRepos", scope: "public", empty: "还没有公开仓库" },
+  ];
+  await Promise.all(
+    targets.map(async (target) => {
+      const box = $(target.id);
+      box.innerHTML = "";
+      try {
+        const data = await api(`/repos?scope=${target.scope}&page_size=5`);
+        if (!data.items.length) {
+          box.innerHTML = `<div class="empty">${target.empty}</div>`;
+          return;
+        }
+        for (const item of data.items) box.append(repoCard(item));
+      } catch (error) {
+        box.innerHTML = "";
+        const note = document.createElement("div");
+        note.className = "empty";
+        note.textContent = error.message;
+        box.append(note);
+      }
+    }),
+  );
 }
 
 function bindEvents() {
@@ -670,12 +1634,57 @@ function bindEvents() {
   $("chatForm").addEventListener("submit", sendChat);
   $("stopButton").addEventListener("click", stopChat);
   $("backButton").addEventListener("click", () => { location.hash = "#/"; });
+  $("repoBackButton").addEventListener("click", () => { location.hash = "#/repos"; });
+  $("repoForm").addEventListener("submit", createRepo);
+  $("refreshRepos").addEventListener("click", () => { loadMyRepos(); loadPublicRepos(); });
+  $("addPapersButton").addEventListener("click", openPaperPicker);
+  $("pickerCancel").addEventListener("click", () => $("pickerDialog").close());
+  $("pickerConfirm").addEventListener("click", confirmPicker);
+  $("pickerQuery").addEventListener("input", (event) => {
+    clearTimeout(window.__pickerTimer);
+    window.__pickerTimer = setTimeout(() => loadPickerItems(event.target.value.trim()), 250);
+  });
+  $("repoChatForm").addEventListener("submit", sendRepoChat);
+  $("repoStopButton").addEventListener("click", stopChat);
+  $("repoChatToggle").addEventListener("click", () => {
+    setRepoChatCollapsed(!$("repoWorkspace").classList.contains("collapsed"));
+  });
   $("citationClose").addEventListener("click", () => $("citationDialog").close());
+  $("citationOpen").addEventListener("click", () => {
+    if (!currentCitation) return;
+    const params = new URLSearchParams();
+    if (currentCitation.page) params.set("page", currentCitation.page);
+    if (currentCitation.quote) params.set("quote", currentCitation.quote);
+    paperReturnHash = location.hash || "#/";
+    $("citationDialog").close();
+    const query = params.toString();
+    location.hash = `#/papers/${currentCitation.paper_id}${query ? "?" + query : ""}`;
+  });
+
+  // 论文详情
+  $("paperBackButton").addEventListener("click", () => { location.hash = paperReturnHash || "#/"; });
+  $("paperSummaryLevel").addEventListener("change", () => {
+    $("paperSummaryButton").textContent = "查看总结";
+    $("paperSummaryButton").dataset.mode = "load";
+    loadPaperSummary();
+  });
+  $("paperSummaryButton").addEventListener("click", () => {
+    const mode = $("paperSummaryButton").dataset.mode || "load";
+    if (mode === "force" && !confirm("重新生成会调用模型并覆盖当前档位的缓存，可能耗时数十秒。继续？")) {
+      return;
+    }
+    loadPaperSummary({ action: mode });
+  });
+  $("paperChatForm").addEventListener("submit", sendPaperChat);
+  $("paperStopButton").addEventListener("click", stopChat);
   $("citationDialog").addEventListener("click", (event) => {
     if (event.target === $("citationDialog")) $("citationDialog").close();
   });
-  document.querySelectorAll(".tab").forEach((tab) => {
+  document.querySelectorAll(".tab[data-tab]").forEach((tab) => {
     tab.addEventListener("click", () => switchTab(tab.dataset.tab));
+  });
+  document.querySelectorAll(".tab[data-repo-tab]").forEach((tab) => {
+    tab.addEventListener("click", () => switchRepoTab(tab.dataset.repoTab));
   });
   window.addEventListener("hashchange", route);
 }
@@ -685,4 +1694,3 @@ boot();
 </script>
 </body>
 </html>
-
